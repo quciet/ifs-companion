@@ -1,67 +1,64 @@
 # IFsCompanion
 
-Windows desktop home for IFs tools, version 0.1.0. This project owns the shell,
-Companion chat interface, shared Settings, Recent Work, desktop host, and installer.
-The working comparison tool lives in the separate `ifs-model-vetting` repository.
-IFs Autotune is an optional installable tool. AI, code reader, and scenario builder are not connected yet.
+IFsCompanion is a Windows desktop workspace for working with International Futures (IFs). Compare model runs, inspect differences over time, and keep your saved comparisons and tools in one place.
 
-## Develop
+## What you can do
 
-Keep the two checkouts next to each other:
+- **Compare runs:** choose a baseline and comparison run, select shared variables, and examine differences.
+- **Inspect results:** open result and audit rows to explore trajectories, then export CSV data or SVG charts.
+- **Return to saved work:** reopen saved comparisons from Recent Work.
+- **Manage tools:** install optional tools and check for tool updates from within the app.
 
-    ifs-companion/
-    ifs-model-vetting/
+Compare Runs is included and works without an AI connection or API key. AI assistance, Explore Code, and Create Scenario are not available yet. IFs Autotune can be installed from a separate tool package; online installation is coming soon.
 
-Set `IFS_MODEL_VETTING_PATH` if the tool checkout is elsewhere. Install the pinned
-dependencies from `packaging/requirements-build.txt` in a Python 3.14 environment.
-Run `python companion_server.py` and visit http://127.0.0.1:8766 for UI development.
-The tool decoder must have been built with `ifs-model-vetting/build.ps1` first.
-Run `python -m unittest discover -s tests -v` for integration checks.
+## Download and install
 
-## Package
+Get the Windows installer or portable ZIP from [Releases](https://github.com/quciet/ifs-companion/releases).
 
-Run `./build.ps1 -PythonPath <python.exe>`. Optional `DotnetPath`, `InnoPath`, and
-`ModelVettingPath` arguments override the local defaults. The build reads the tool
-checkout, bundles its engine/UI, and produces one installer and portable ZIP in
-`release`. Users do not need either source checkout or a separate tool installation.
-Run `dist/IFsCompanion/IFsCompanion.exe` to preview without installing.
+**Requirements:** Windows 10 version 1809 or later, or Windows 11, on an x64 computer. You will also need your own IFs installation and model files; these are not included.
 
-The small adapter is `companion_server.py`. It delegates comparison endpoints to
-the tool's existing HTTP handler and serves the shared shell around its UI.
-Optional tools use the small local package manager described in TOOL_PACKAGES.md.
-The build uses the current tool checkout; coordinate incompatible changes in
-the two projects and run integration tests before releasing.
+### Installer
 
-Existing user settings/reports remain under `%LOCALAPPDATA%/IFsModelVetting` for
-compatibility. `IFS_VETTING_DATA_DIR` overrides this for isolated tests.
-Desktop smoke test: `IFsCompanion.exe --smoke-test <absolute-output.json>`.
-The current installer is unsigned. No GitHub release is automatically published.
+1. Download and run the `IFsCompanion-Setup-…-win-x64.exe` installer.
+2. Open IFsCompanion from the Start menu or desktop shortcut.
 
-Release retention: after a successful build, build.ps1 verifies both packages against the SHA256 manifest and removes older installer/portable releases and checksum manifests from release/. Failed builds preserve prior releases. Source, installed applications, and user data are unaffected.
+The installer includes the required application runtimes and installs Microsoft WebView2 if it is missing. Installing WebView2 requires an internet connection. The current installer is unsigned.
 
-## Optional tools
+### Portable version
 
-Open Settings > Manage tools > Install from file and select a trusted `.ifstool`
-package. Installed tools appear under Tools and open in Companion's right panel.
-Use Close tool before Update from file or Uninstall. Stop active work inside the
-tool first. Uninstall removes program files and preserves settings and results.
-Closing Companion also closes optional tools; it asks first if a tool is busy.
+1. Download and extract the complete portable ZIP.
+2. Open `IFsCompanion.exe` from the extracted folder.
 
-Tool files live under `%LOCALAPPDATA%/IFsModelVetting/companion/tools` and user
-data under the separate `companion/tool-data` directory. `IFS_VETTING_DATA_DIR`
-redirects both for testing. Packages include their runtimes, so coworkers do not
-need Python, Node, or source repositories. Manage tools reads the official catalog from this repository. Online installation
-checks the release checksum and compatibility. Updates are user-triggered; local
-Install from file remains available when offline.
+Keep all extracted files and folders together. The portable version requires WebView2 to be installed already; use the installer if it is missing.
 
-For the optional autotune package, see the sibling `ifs-autotune` repository's
-`scripts/build-tool.py`. Required small tools remain bundled with Companion.
+## Your first comparison
 
-## Official tool releases
+1. Open **Settings** and browse to your IFs installation folder, which contains `DATA` and `RUNFILES`. Select **Validate and save**.
+2. Open **Tools > Compare Runs** and choose your baseline and comparison runs.
+3. Load the shared variables, select the outputs you want to examine, and run the comparison.
+4. Select a result or audit row to inspect trajectories. Export CSV data or SVG charts as needed.
+5. Use **Recent Work** to return to saved comparisons.
 
-The approval catalog is `official-tools/catalog.json`. Tool packages are GitHub
-Release assets in this repository, not files committed to Git. See
-`official-tools/README.md` for the publishing workflow. Companion's repository and
-release downloads are public so installation does not require a GitHub account.
-Compare Runs is the first published tool. It remains included with Companion;
-its downloadable package enables independent updates and preserves existing reports.
+Comparison work runs locally on your computer. The results provide numerical evidence to help you assess model changes; you decide whether those changes are expected.
+
+## Add or update tools
+
+Open **Settings > Manage tools** to see official tools and available versions. Select **Install** for an available tool, or **Check for updates** to refresh the list. Online installation requires internet access but does not require a GitHub account.
+
+You can also select **Install from file** and choose a trusted `.ifstool` package saved on your computer. This option works offline. Tool packages include their required runtimes.
+
+Before updating or uninstalling a tool, stop its active work and select **Close tool**. Updates are started by you and are not installed automatically. Uninstalling a tool preserves its settings and saved work. Compare Runs remains included with Companion; removing its separate update package restores the included version.
+
+## Saved work and settings
+
+Settings, results, and logs are stored in `%LOCALAPPDATA%\IFsModelVetting`, retaining compatibility with earlier versions. Application updates and uninstall preserve this data.
+
+Closing Companion also closes optional tools. If a tool is busy, the app asks before interrupting it.
+
+For more usage details, see the [User Guide](USER_GUIDE.txt).
+
+## Feedback and license
+
+Report problems or suggest improvements through [GitHub Issues](https://github.com/quciet/ifs-companion/issues).
+
+IFsCompanion is available under the [MIT License](LICENSE). See [Third-party notices](THIRD_PARTY_NOTICES.txt) for bundled software acknowledgments.
