@@ -117,7 +117,7 @@ sealed class CompanionWindow : Form
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
                 var state = JsonDocument.Parse(await client.GetStringAsync(origin + "/api/status"));
                 if (state.RootElement.GetProperty("running").GetBoolean() && MessageBox.Show(this,
-                    "A comparison is running. Close IFsCompanion and interrupt it?", "IFsCompanion", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                    "A tool is running work. Close IFsCompanion and interrupt it?", "IFsCompanion", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             } catch { /* An unavailable engine must not prevent closing the app. */ }
             finally { Enabled = true; }
             closing = true; Close(); return;

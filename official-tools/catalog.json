@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "tools": [
+    {
+      "id": "ifs-model-vetting",
+      "name": "Compare Runs",
+      "description": "Compare IFs runfiles and inspect differences, charts, and trajectory audits. Included with Companion; install this package for independent tool updates.",
+      "version": "0.1.0",
+      "min_companion_version": "0.1.0",
+      "api_version": 1,
+      "platform": "win-x64",
+      "url": "https://github.com/quciet/ifs-companion/releases/download/comparison-v0.1.0/ifs-model-vetting-0.1.0-win-x64.ifstool",
+      "sha256": "5306f0e2d3f4cdfe23cbfa2818cb213352b5491b1f8a1022f1ff763790cce88f",
+      "size": 64186244
+    },
+    {
+      "id": "ifs-autotune",
+      "name": "IFs Autotune",
+      "description": "Tune the model through parameter experiments. Available from a local package; online distribution is coming next.",
+      "status": "coming-soon"
+    },
+    {
+      "id": "ifs-code-reader",
+      "name": "Explore Code",
+      "description": "Ask questions about relationships in IFs model code. This tool is still planned.",
+      "status": "coming-soon"
+    },
+    {
+      "id": "ifs-scenario-builder",
+      "name": "Create Scenario",
+      "description": "Turn a scenario description into an IFs scenario file. This tool is still planned.",
+      "status": "coming-soon"
+    }
+  ]
+}

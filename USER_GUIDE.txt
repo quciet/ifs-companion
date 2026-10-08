@@ -15,12 +15,46 @@ comparison work runs locally. IFs and model files are not included.
 
 Settings, results, and logs remain in %LOCALAPPDATA%\IFsModelVetting for
 compatibility with earlier versions. Updates and uninstall preserve that data.
-Closing during a comparison asks whether to interrupt it.
+Closing while a tool is doing work asks whether to interrupt it.
 
 For portable use, extract the complete ZIP and open IFsCompanion.exe.
 Keep all extracted files and the engine folder together. WebView2 must already
 be installed; use the installer if it is missing.
 
 Requires Windows 10 version 1809 or later, or Windows 11, x64.
-This release supports model comparison. AI and autotuning will be added later.
+Model comparison is included. IFs Autotune is available as an optional tool.
+AI, code reader, and scenario builder are not connected yet.
 The app provides numerical evidence; reviewers decide whether changes are expected.
+
+INSTALLING OPTIONAL TOOLS
+
+1. Save the .ifstool package shared by your team to your computer.
+2. In Companion, open Settings > Manage tools > Install from file.
+3. Choose the package and confirm that you trust its source.
+4. Wait for the ready message. Large packages can take a few minutes.
+5. Open the tool from Tools. It appears inside Companion's right panel.
+
+IFs Autotune includes its own Python and Electron runtime. You do not need to
+install development software. The shared IFs folder is prefilled when the tool
+starts; use the tool's validation step before running experiments.
+
+To update: stop active work, open Manage tools, click Close tool, then choose
+Update from file and select the new package. Tools do not update automatically.
+To remove: close the tool, then click Uninstall. Your settings and saved work
+are kept and will still be available if you reinstall the tool later.
+
+Optional tools must be supplied in the IFsCompanion .ifstool package format.
+Install only packages from people you trust. Do not select an ordinary software
+installer, source-code ZIP, or Python project folder.
+
+OFFICIAL TOOLS ONLINE
+
+Open Settings > Manage tools. Official tools lists approved tools and available
+versions. Click Install (or Install separate tool updates for Compare Runs) and
+wait for downloading, verification, and installation to finish. A GitHub account
+is not needed. Internet access is required for this step; installed tools run locally.
+
+Click Check for updates to refresh the list. Close an open tool before updating.
+If offline, use Install from file. Compare Runs remains included: uninstalling its
+separate package restores the included version without deleting saved comparisons.
+Autotune's online package, code reader, and scenario builder are not published yet.

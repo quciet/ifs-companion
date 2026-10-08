@@ -41,4 +41,5 @@ Get-ChildItem -LiteralPath 'release' -File | Where-Object { $_.Name -like "IFsCo
     $hash=Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
     "$($hash.Hash.ToLowerInvariant())  $($_.Name)"
 } | Set-Content -LiteralPath "release\SHA256SUMS-$appVersion.txt" -Encoding ascii
+& (Join-Path $PSScriptRoot 'packaging\prune-releases.ps1') -ReleaseDirectory (Join-Path $PSScriptRoot 'release') -Version $appVersion
 Write-Output 'IFsCompanion Windows installer and portable ZIP are in release.'
