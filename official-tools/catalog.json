@@ -3,7 +3,7 @@
   "tools": [
     {
       "id": "ifs-model-vetting",
-      "name": "Compare Runs",
+      "name": "IFs Vetting",
       "description": "Compare IFs runfiles and inspect differences, charts, and trajectory audits. Included with Companion; install this package for independent tool updates.",
       "version": "0.1.0",
       "min_companion_version": "0.1.0",
