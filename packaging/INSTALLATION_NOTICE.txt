@@ -1,0 +1,15 @@
+Included software
+
+IFsCompanion includes Python 3.14.8, NumPy 2.5.3, Tcl/Tk, a PyInstaller
+bootloader, the .NET 10 runtime, Parquet.Net 2.1.4, and WebView2 SDK components.
+These run inside the application package without changing your Python or PATH.
+
+The desktop interface uses Microsoft Edge WebView2 Runtime. If it is missing,
+setup downloads and installs it using Microsoft's signed bootstrapper. Internet
+access is required for that step. The runtime receives updates from Microsoft.
+
+IFsCompanion is MIT licensed. Third-party components retain their licenses;
+see LICENSE, THIRD_PARTY_NOTICES.txt, and the licenses directory.
+
+Select an existing local IFs installation after starting the app. IFs itself,
+model files, AI access, and API keys are not included in this installer.

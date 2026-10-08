@@ -1,0 +1,26 @@
+IFsCompanion 0.1.0
+
+Run IFsCompanion-Setup-0.1.0-win-x64.exe, then open IFsCompanion from the
+Start menu or desktop shortcut. The interface opens directly in its own window.
+Close that window to quit. There is no separate browser or companion launcher.
+
+1. Open Settings and browse to your IFs installation folder (containing DATA and RUNFILES).
+2. Open Tools > Compare Runs. Choose the baseline and comparison runs.
+3. Load shared variables, select outputs, and compare.
+4. Click a result or audit row to inspect trajectories. Save CSVs or SVG charts.
+
+Python, NumPy, and .NET are bundled. Setup automatically installs Microsoft
+WebView2 if missing; that step requires an internet connection. Subsequent
+comparison work runs locally. IFs and model files are not included.
+
+Settings, results, and logs remain in %LOCALAPPDATA%\IFsModelVetting for
+compatibility with earlier versions. Updates and uninstall preserve that data.
+Closing during a comparison asks whether to interrupt it.
+
+For portable use, extract the complete ZIP and open IFsCompanion.exe.
+Keep all extracted files and the engine folder together. WebView2 must already
+be installed; use the installer if it is missing.
+
+Requires Windows 10 version 1809 or later, or Windows 11, x64.
+This release supports model comparison. AI and autotuning will be added later.
+The app provides numerical evidence; reviewers decide whether changes are expected.

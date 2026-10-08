@@ -1,0 +1,22 @@
+__pycache__/
+.packaging-venv314/
+build-tools/
+build/
+dist/
+release/
+decoder-runtime/
+output/
+.playwright-cli/
+desktop/bin/
+desktop/obj/
+
+# Local configuration, credentials, and development artifacts
+.env
+.env.*
+!.env.example
+.venv/
+.pytest_cache/
+*.log
+*.tmp
+*.bak
+settings.json
