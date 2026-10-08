@@ -29,7 +29,7 @@ The app provides numerical evidence; reviewers decide whether changes are expect
 INSTALLING OPTIONAL TOOLS
 
 1. Save the .ifstool package shared by your team to your computer.
-2. In Companion, open Settings > Manage tools > Install from file.
+2. In Companion, open Settings > Manage tools > Add from file.
 3. Choose the package and confirm that you trust its source.
 4. Wait for the ready message. Large packages can take a few minutes.
 5. Open the tool from Tools. It appears inside Companion's right panel.
@@ -38,23 +38,16 @@ IFs Autotune includes its own Python and Electron runtime. You do not need to
 install development software. The shared IFs folder is prefilled when the tool
 starts; use the tool's validation step before running experiments.
 
-To update: stop active work, open Manage tools, click Close tool, then choose
-Update from file and select the new package. Tools do not update automatically.
-To remove: close the tool, then click Uninstall. Your settings and saved work
-are kept and will still be available if you reinstall the tool later.
+To manage installed tools, open their (...) menu. Official tools offer Update,
+Update from file, and Uninstall. Other tools offer Update from file and Uninstall.
+Stop active work first; idle tools close automatically. Uninstall removes the
+sidebar entry and preserves settings and saved work. Removing the included
+comparison tool disables it until reinstalled; bundled program files remain.
 
-Optional tools must be supplied in the IFsCompanion .ifstool package format.
-Install only packages from people you trust. Do not select an ordinary software
-installer, source-code ZIP, or Python project folder.
+For available official tools, use the + menu to Install online or Install from
+file. The catalog refreshes when this screen opens. Update is enabled only for
+a newer compatible official release. Online installation needs internet access,
+but no GitHub account. Add from file also works offline.
 
-OFFICIAL TOOLS ONLINE
-
-Open Settings > Manage tools. Official tools lists approved tools and available
-versions. Click Install (or Install separate tool updates for Compare Runs) and
-wait for downloading, verification, and installation to finish. A GitHub account
-is not needed. Internet access is required for this step; installed tools run locally.
-
-Click Check for updates to refresh the list. Close an open tool before updating.
-If offline, use Install from file. Compare Runs remains included: uninstalling its
-separate package restores the included version without deleting saved comparisons.
-Autotune's online package, code reader, and scenario builder are not published yet.
+File installs can use a beta or older version after confirmation. Older versions
+may not support data saved by newer versions. Only use trusted packages.

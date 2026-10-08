@@ -5,9 +5,8 @@ x64 program files. Packages run trusted native code. This is an internal package
 format, not a sandbox or a way to install arbitrary ZIP files. Only install tools
 from your team. Optional tools can be installed, updated from a newer package,
 and uninstalled independently of Companion. Same-version repair is allowed;
-downgrades are rejected. An installed `ifs-model-vetting` package overrides the
-included comparison engine. Uninstalling it restores the included version and
-preserves shared settings and reports. Official downloads are listed in
+automatic downgrades are rejected; explicitly confirmed file installs may use older or prerelease versions. An installed `ifs-model-vetting` package overrides the
+included comparison engine. Uninstalling it removes comparison from the sidebar and preserves shared settings and reports. Official downloads are listed in
 `official-tools/catalog.json` and hosted as versioned GitHub Release assets.
 
 Example manifest:
@@ -52,4 +51,15 @@ uninstall; tool-specific schema migrations belong to the tool itself.
 
 Companion validates/extracts updates into a temporary directory before replacing
 the installed version. Failed validation leaves the old version intact, and a
-failed file swap restores it. Close the tool before updating or removing it.
+failed file swap restores it. Companion closes idle tools before updates or removal; active work must be stopped first.
+
+## Embedded session controls
+
+Expose `window.companionSession` from the tool UI with `canGoBack()`, `back()`,
+and async `stop()` methods. Back must navigate inside that tool, never between
+Companion tools. Post `{type: 'tool-navigation'}` to the same-origin parent when
+the tool's navigation state changes. Stop must wait for work to finish stopping,
+then show the starting screen while retaining form selections and saved results.
+Reject on failure so Companion can display an error; do not reload the iframe or
+clear user settings. Companion keeps a separate iframe for each opened tool.
+Older packages without this interface must be updated to use the Stop button.

@@ -10,7 +10,7 @@ import zipfile
 from tool_manager import MAX_UPLOAD, manifest
 
 CATALOG_URL = 'https://raw.githubusercontent.com/quciet/ifs-companion/main/official-tools/catalog.json'
-COMPANION_VERSION = (0, 1, 0)
+COMPANION_VERSION = (0, 1, 1)
 RELEASE_PREFIX = 'https://github.com/quciet/ifs-companion/releases/download/'
 
 def version(text):
@@ -25,7 +25,7 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
 def open_url(url):
-    request=urllib.request.Request(url,headers={'User-Agent':'IFsCompanion/0.1.0','Cache-Control':'no-cache'})
+    request=urllib.request.Request(url,headers={'User-Agent':'IFsCompanion/0.1.1','Cache-Control':'no-cache'})
     return urllib.request.build_opener(SafeRedirect()).open(request,timeout=30)
 
 def validate_catalog(document):
@@ -93,7 +93,7 @@ class OfficialTools:
             row=next((item for item in self.catalog()['tools'] if item['id']==identity),None)
             if not row or row.get('status')!='available':raise ValueError('This tool is not available yet.')
             if not row['compatible']:raise ValueError('Update Companion before installing this tool.')
-            if self.manager._folder(identity).exists():self.manager._require_stopped(identity)
+            if self.manager._folder(identity).exists():self.manager.stop(identity);self.manager._require_stopped(identity)
             with tempfile.TemporaryFile() as package:
                 digest=hashlib.sha256();received=0
                 self._state(status='downloading',total=row['size'],message='Downloading '+row['name']+'…')
@@ -114,6 +114,7 @@ class OfficialTools:
                     raise ValueError('The package does not match the official tool and version.')
                 self._state(status='installing',message='Installing '+row['name']+'…')
                 package.seek(0);self.manager.install(package,expected_id=identity,official_sha256=row['sha256'])
+                if identity == 'ifs-model-vetting': (self.manager.root / 'comparison-removed').unlink(missing_ok=True)
             self._state(status='complete',message=row['name']+' '+row['version']+' is ready.')
         except Exception as error:
             self._state(status='error',message=str(error))

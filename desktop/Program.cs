@@ -24,6 +24,7 @@ sealed class CompanionWindow : Form
     Process? backend;
     string? origin;
     bool closing;
+    bool pickingFolder;
 
     public CompanionWindow(string[] args)
     {
@@ -59,6 +60,7 @@ sealed class CompanionWindow : Form
                 if (!e.Uri.StartsWith(origin + "/", StringComparison.Ordinal) && e.Uri != origin) e.Cancel = true;
             };
             view.CoreWebView2.NewWindowRequested += (_, e) => e.Handled = true;
+            view.CoreWebView2.WebMessageReceived += FolderRequested;
             view.CoreWebView2.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
             view.CoreWebView2.DownloadStarting += (_, e) => {
                 using var dialog = new SaveFileDialog { FileName = Path.GetFileName(e.ResultFilePath), OverwritePrompt = true };
@@ -105,6 +107,30 @@ sealed class CompanionWindow : Form
             else MessageBox.Show(this, "IFsCompanion could not start.\n\n" + ex.Message + "\n\nIf WebView2 is missing, rerun the installer.", "IFsCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
             closing = true; Close();
         }
+    }
+
+    void FolderRequested(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        if (closing || pickingFolder || e.Source != origin + "/") return;
+        using var message = JsonDocument.Parse(e.WebMessageAsJson);
+        if (!message.RootElement.TryGetProperty("type", out var type) || type.GetString() != "select-installation") return;
+        var initial = message.RootElement.GetProperty("installation").GetString() ?? "";
+        pickingFolder = true;
+        // Leave the WebView2 callback before entering a modal Windows message loop.
+        BeginInvoke((Action)(() => {
+            try {
+                if (closing || IsDisposed) return;
+                using var dialog = new FolderBrowserDialog {
+                    Description = "Select IFs installation folder", UseDescriptionForTitle = true,
+                    SelectedPath = initial, ShowNewFolderButton = false
+                };
+                var selected = dialog.ShowDialog(this) == DialogResult.OK ? dialog.SelectedPath : null;
+                view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "installation-selected", installation = selected }));
+            } catch (Exception ex) {
+                if (!closing && !IsDisposed)
+                    view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "installation-selected", error = ex.Message }));
+            } finally { pickingFolder = false; }
+        }));
     }
 
     async void ClosingAsync(object? sender, FormClosingEventArgs e)

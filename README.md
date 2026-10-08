@@ -33,7 +33,7 @@ Keep all extracted files and folders together. The portable version requires Web
 
 ## Your first comparison
 
-1. Open **Settings** and browse to your IFs installation folder, which contains `DATA` and `RUNFILES`. Select **Validate and save**.
+1. Open **Settings** and browse to your IFs installation folder, which contains `DATA` and `RUNFILES`. Select **Validate and save**. Companion requires `IFsInit.db` with a readable base year and model version; `DATA/IFsHistSeries.db`, `DATA/DataDict.db`, and `DATA/SAMBase.db`; `RUNFILES/IFsHistSeries.db`, `RUNFILES/DataDict.db`, `RUNFILES/IFsVar.db`, `RUNFILES/IFsBase.run.db`, and `RUNFILES/IFs.db`; and `net8/ifs.exe`. The detected version and base year appear in Settings.
 2. Open **Tools > Compare Runs** and choose your baseline and comparison runs.
 3. Load the shared variables, select the outputs you want to examine, and run the comparison.
 4. Select a result or audit row to inspect trajectories. Export CSV data or SVG charts as needed.
@@ -43,11 +43,16 @@ Comparison work runs locally on your computer. The results provide numerical evi
 
 ## Add or update tools
 
-Open **Settings > Manage tools** to see official tools and available versions. Select **Install** for an available tool, or **Check for updates** to refresh the list. Online installation requires internet access but does not require a GitHub account.
+Open **Settings > Manage tools** for one searchable list of installed and official tools. This screen manages tools; open installed tools from the left sidebar.
 
-You can also select **Install from file** and choose a trusted `.ifstool` package saved on your computer. This option works offline. Tool packages include their required runtimes.
+- Choose **Add from file** to install a trusted `.ifstool` package.
+- For an available official tool, open **+** and choose **Install** or **Install from file**.
+- Installed official tools offer **Update**, **Update from file**, and **Uninstall**. Update is enabled when a newer compatible official release is available.
+- Unofficial tools offer **Update from file** and **Uninstall**.
 
-Before updating or uninstalling a tool, stop its active work and select **Close tool**. Updates are started by you and are not installed automatically. Uninstalling a tool preserves its settings and saved work. Compare Runs remains included with Companion; removing its separate update package restores the included version.
+The official catalog refreshes when you open this screen. File installs support explicitly selected older and prerelease versions. Only use trusted packages; older versions may not understand saved data from newer versions.
+
+Uninstall closes an idle tool and removes it from the sidebar while preserving settings and saved work. Stop active work first. Removing the included comparison tool disables it; its bundled files remain part of Companion. Reinstall it from the official catalog or a package to use it again.
 
 ## Saved work and settings
 

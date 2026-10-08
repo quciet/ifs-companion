@@ -8,6 +8,7 @@ import tempfile
 import urllib.error
 from tool_manager import ToolManager, MAX_UPLOAD
 from official_tools import OfficialTools
+from installation_validation import validate_installation
 from urllib.parse import urlparse, parse_qs
 
 ROOT = Path(__file__).resolve().parent
@@ -86,7 +87,9 @@ class Handler(app.Handler):
                     if not chunk: raise ValueError('Upload interrupted. The previous tool is unchanged.')
                     upload.write(chunk); remaining -= len(chunk)
                 upload.seek(0)
-                return self.send(self.tools().install(upload, expected))
+                result = self.tools().install(upload, expected, allow_older=parse_qs(urlparse(self.path).query).get('allow_older') == ['1'])
+                if result['id'] == 'ifs-model-vetting': (self.tools().root / 'comparison-removed').unlink(missing_ok=True)
+                return self.send(result)
         size = int(self.headers.get('Content-Length', 0))
         if not 0 < size < 16384: raise ValueError('Invalid tool request.')
         request = json.loads(self.rfile.read(size))
@@ -98,7 +101,12 @@ class Handler(app.Handler):
             if identity == 'ifs-model-vetting': app.restore_jobs()
             return self.send(result)
         if self.path == '/api/tools/uninstall':
-            result = self.tools().uninstall(identity)
+            if identity == 'ifs-model-vetting' and not self.tools()._folder(identity).exists():
+                self.comparison_guard(identity)
+                result = {'removed': identity, 'data_preserved': True}
+            else:
+                result = self.tools().uninstall(identity, close_idle=True)
+            if identity == 'ifs-model-vetting': (self.tools().root / 'comparison-removed').touch()
             if identity == 'ifs-model-vetting': app.restore_jobs()
             return self.send(result)
         raise ValueError('Unknown tool action.')
@@ -110,9 +118,18 @@ class Handler(app.Handler):
                 self.tool_access()
                 if path == '/api/tools/catalog': return self.send(self.official().catalog())
                 if path == '/api/tools/download': return self.send(self.official().progress())
-                if path == '/api/tools': return self.send({'tools': self.tools().list()})
+                if path == '/api/tools': return self.send({'tools': self.tools().list(), 'comparison_enabled': not (self.tools().root / 'comparison-removed').exists()})
                 return self.proxy_tool('GET')
             except Exception as error: return self.send({'error': str(error)}, status=400)
+        if path == '/api/installation':
+            try:
+                installation = app.saved_installation()
+                if installation is None:
+                    return self.send(app.empty_installation())
+                metadata = validate_installation(installation)
+                return self.send({**app.installation_layout(installation), **metadata})
+            except (ValueError, OSError) as error:
+                return self.send({'error': str(error)}, status=400)
         if path == '/api/status':
             return self.send({'running': any(j['status'] == 'running' for j in app.JOBS.values()) or self.tools().busy() or self.official().progress()['status'] in ('checking','downloading','verifying','installing')})
         if path in ('/', '/shell.js', '/shell.css'):
@@ -145,6 +162,22 @@ class Handler(app.Handler):
         return super().do_GET()
 
     def do_POST(self):
+        if self.path == '/api/installation':
+            try:
+                self.tool_access(mutate=True)
+                size = int(self.headers.get('Content-Length', 0))
+                if not 0 < size < 16384:
+                    raise ValueError('Invalid installation request.')
+                request = json.loads(self.rfile.read(size))
+                request['installation'] = str(request.get('installation') or '').strip()
+                metadata = validate_installation(request['installation'])
+                layout = {**app.installation_layout(request['installation']), **metadata}
+                app.DATA_ROOT.mkdir(parents=True, exist_ok=True)
+                with app.LOCK:
+                    app.SETTINGS.write_text(json.dumps({'installation': layout['installation']}, indent=2), encoding='utf-8')
+                return self.send(layout)
+            except (ValueError, TypeError, AttributeError, OSError) as error:
+                return self.send({'error': str(error)}, status=400)
         if self.path.startswith(('/api/tools/', '/tools/')):
             try:
                 if self.path.startswith('/tools/'): return self.proxy_tool('POST')

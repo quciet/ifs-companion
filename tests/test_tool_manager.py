@@ -29,6 +29,24 @@ class ToolPackageTests(unittest.TestCase):
         self.manager.uninstall('sample-tool')
         self.assertEqual(result.read_text(),'saved work')
         self.assertEqual(self.manager.list(),[])
+    def test_explicit_older_and_prerelease_install(self):
+        self.manager.install(self.package('2.0.0'))
+        with self.assertRaises(ValueError):self.manager.install(self.package('1.0.0-beta.1'))
+        self.manager.install(self.package('1.0.0-beta.1'),allow_older=True)
+        self.assertEqual(self.manager.read('sample-tool')['version'],'1.0.0-beta.1')
+        self.manager.install(self.package('1.0.0'))
+        with self.assertRaises(ValueError):self.manager.install(self.package('1.0.0-beta.2'))
+
+    def test_uninstall_closes_idle_tool_but_preserves_busy_tool(self):
+        self.manager.install(self.package())
+        with patch.object(self.manager,'stop',side_effect=ValueError('This tool is busy')):
+            with self.assertRaisesRegex(ValueError,'busy'):self.manager.uninstall('sample-tool',close_idle=True)
+        self.assertTrue(self.manager._folder('sample-tool').exists())
+        with patch.object(self.manager,'stop') as stop:
+            self.manager.uninstall('sample-tool',close_idle=True)
+            stop.assert_called_once_with('sample-tool')
+        self.assertEqual(self.manager.list(),[])
+
     def test_bad_update_does_not_replace_working_tool(self):
         self.manager.install(self.package())
         for package in [self.package('0.9.0'), self.package('2.0.0',{'../escape':'bad'}),self.package('2.0.0',{'app/TOOL.EXE':'duplicate'})]:

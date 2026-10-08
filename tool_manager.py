@@ -38,12 +38,17 @@ def manifest(data):
         raise ValueError('This package requires a different Companion version or platform.')
     if not isinstance(data.get('name'), str) or not 1 <= len(data['name']) <= 80:
         raise ValueError('A tool name is required.')
-    if not isinstance(data.get('version'), str) or not re.fullmatch(r'\d+\.\d+\.\d+', data['version']):
-        raise ValueError('Tool version must use major.minor.patch.')
+    if not isinstance(data.get('version'), str) or not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?', data['version']):
+        raise ValueError('Tool version must use major.minor.patch with an optional prerelease suffix.')
     entry = safe_relative(data.get('entrypoint'))
     if entry.suffix.lower() != '.exe': raise ValueError('A self-contained Windows executable is required.')
     # Do not accept arbitrary commands, shell strings, or environment overrides.
     return {key: data[key] for key in ('id', 'name', 'version', 'api_version', 'platform', 'kind', 'entrypoint')}
+
+def version_key(value):
+    core, _, prerelease = value.partition('-')
+    parts = tuple((0, int(p)) if p.isdigit() else (1, p) for p in prerelease.split('.')) if prerelease else ()
+    return (tuple(map(int, core.split('.'))), not bool(prerelease), parts)
 
 class ToolManager:
     def __init__(self, root):
@@ -85,7 +90,7 @@ class ToolManager:
                 except (ValueError, OSError): continue
             return result
 
-    def install(self, archive, expected_id=None, official_sha256=None):
+    def install(self, archive, expected_id=None, official_sha256=None, allow_older=False):
         with self.lock, zipfile.ZipFile(archive) as package:
             infos = package.infolist()
             if len(infos) > 100000 or sum(i.file_size for i in infos) > MAX_EXPANDED:
@@ -109,7 +114,7 @@ class ToolManager:
             if folder.exists():
                 self._require_stopped(identity)
                 previous = self.read(identity)
-                if tuple(map(int, meta['version'].split('.'))) < tuple(map(int, previous['version'].split('.'))):
+                if not allow_older and version_key(meta['version']) < version_key(previous['version']):
                     raise ValueError('An older version cannot replace an installed tool.')
             with tempfile.TemporaryDirectory(prefix='.install-', dir=self.programs) as temp:
                 stage = Path(temp) / 'new'
@@ -142,11 +147,12 @@ class ToolManager:
             if handle == ctypes.c_void_p(-1).value: raise ValueError('The tool is in use. Close it and try again.')
             kernel.CloseHandle(ctypes.c_void_p(handle))
 
-    def uninstall(self, identity):
+    def uninstall(self, identity, close_idle=False):
         with self.lock:
             self.before_change(identity)
             folder = self._folder(identity)
             self.read(identity)
+            if close_idle: self.stop(identity)
             self._require_stopped(identity)
             shutil.rmtree(folder)
             return {'removed': identity, 'data_preserved': True}
@@ -204,7 +210,9 @@ class ToolManager:
             except Exception: pass
             state['process'].stdin.close()
             try: state['process'].wait(timeout=10)
-            except subprocess.TimeoutExpired: state['process'].terminate()
+            except subprocess.TimeoutExpired:
+                state['process'].terminate()
+                state['process'].wait(timeout=10)
             return {'closed':identity}
 
     def busy(self):
