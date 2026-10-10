@@ -28,8 +28,14 @@
     {
       "id": "ifs-code-reader",
       "name": "Explore Code",
-      "description": "Ask questions about relationships in IFs model code. This tool is still planned.",
-      "status": "coming-soon"
+      "description": "Explore IFs source code and wiki references with local text and semantic search, AI-assisted questions, and saved answers with citations.",
+      "version": "0.3.0",
+      "min_companion_version": "0.1.2",
+      "api_version": 1,
+      "platform": "win-x64",
+      "url": "https://github.com/quciet/ifs-companion/releases/download/code-reader-v0.3.0/ifs-code-reader-0.3.0-win-x64.ifstool",
+      "sha256": "6e7ce8053ecc31d7175f1227f45c1ad817fbe66377c1e273d57232c0c69a3f73",
+      "size": 134522593
     },
     {
       "id": "ifs-scenario-builder",
