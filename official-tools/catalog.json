@@ -5,16 +5,16 @@
       "id": "ifs-model-vetting",
       "name": "IFs Vetting",
       "description": "Compare IFs runfiles and inspect differences, charts, and trajectory audits. Included with Companion; install this package for independent tool updates.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "min_companion_version": "0.1.0",
       "api_version": 1,
       "platform": "win-x64",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/comparison-v0.1.1/ifs-model-vetting-0.1.1-win-x64.ifstool",
-      "sha256": "58bff0113fa1cf7114d7706a2ebc5698b0d59d6e0ef256dfe7a367fa061b57ec",
-      "size": 64189014,
-      "installed_size": 142361889,
+      "url": "https://github.com/quciet/ifs-companion/releases/download/comparison-v0.1.2/ifs-model-vetting-0.1.2-win-x64.ifstool",
+      "sha256": "3422e403cf80e15e79b922988b7169b1fcff8c6f5a73f48c69623e37d5ffb1df",
+      "size": 64188200,
+      "installed_size": 142361877,
       "released_at": "2026-10-10",
-      "release_notes": "Live selected-indicator count (selected/shared), searchable indicator codes, names and dimensions, and selection preservation while filtering. Stop now shows immediate feedback, interrupts active decoding, and checks cancellation between comparison stages. Human reviewers retain all modeling judgments.\n"
+      "release_notes": "Fix Select core indicators to update the selected/shared count and submitted comparison indicators together. The preset selects all available shared core indicators, including those currently hidden by search.\n"
     },
     {
       "id": "ifs-autotune",
