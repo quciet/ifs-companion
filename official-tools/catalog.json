@@ -11,7 +11,10 @@
       "platform": "win-x64",
       "url": "https://github.com/quciet/ifs-companion/releases/download/comparison-v0.1.0/ifs-model-vetting-0.1.0-win-x64.ifstool",
       "sha256": "5306f0e2d3f4cdfe23cbfa2818cb213352b5491b1f8a1022f1ff763790cce88f",
-      "size": 64186244
+      "size": 64186244,
+      "installed_size": 142357475,
+      "released_at": "2026-10-08",
+      "release_notes": "Compare runfiles, inspect differences and trajectory audits, and export reports. Supports independent installation through Companion."
     },
     {
       "id": "ifs-autotune",
@@ -23,7 +26,10 @@
       "platform": "win-x64",
       "url": "https://github.com/quciet/ifs-companion/releases/download/autotune-v0.1.0/ifs-autotune-0.1.0-win-x64.ifstool",
       "sha256": "09448fa3ec10e4ad23557fd6b428a194cb6c0613450cf9b1e2d5002990d9ec3f",
-      "size": 356558849
+      "size": 356558849,
+      "installed_size": 1091052457,
+      "released_at": "2026-10-08",
+      "release_notes": "Run parameter experiments, inspect fit scores, and review optimization progress inside Companion. Includes Python and Electron runtimes."
     },
     {
       "id": "ifs-code-reader",
@@ -35,7 +41,10 @@
       "platform": "win-x64",
       "url": "https://github.com/quciet/ifs-companion/releases/download/code-reader-v0.3.0/ifs-code-reader-0.3.0-win-x64.ifstool",
       "sha256": "6e7ce8053ecc31d7175f1227f45c1ad817fbe66377c1e273d57232c0c69a3f73",
-      "size": 134522593
+      "size": 134522593,
+      "installed_size": 281627604,
+      "released_at": "2026-10-10",
+      "release_notes": "Research IFs source and wiki references using local text and semantic search. Ask AI-assisted questions and save answers with citations. Includes source snapshots and an offline embedding model. Configure an AI provider in Companion for questions."
     },
     {
       "id": "ifs-scenario-builder",
