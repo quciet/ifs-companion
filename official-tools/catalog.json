@@ -3,7 +3,7 @@
   "tools": [
     {
       "id": "ifs-model-vetting",
-      "name": "IFs Vetting",
+      "name": "Model Vetting",
       "description": "Compare IFs runfiles and inspect differences, charts, and trajectory audits. Included with Companion; install this package for independent tool updates.",
       "version": "0.1.0",
       "min_companion_version": "0.1.0",
@@ -15,7 +15,7 @@
     },
     {
       "id": "ifs-autotune",
-      "name": "IFs Autotune",
+      "name": "Autotune",
       "description": "Tune IFs through parameter experiments, inspect fit scores, and review optimization progress. Includes the Python and Electron runtimes.",
       "version": "0.1.0",
       "min_companion_version": "0.1.0",
@@ -27,7 +27,7 @@
     },
     {
       "id": "ifs-code-reader",
-      "name": "Explore Code",
+      "name": "Code Interpreter",
       "description": "Explore IFs source code and wiki references with local text and semantic search, AI-assisted questions, and saved answers with citations.",
       "version": "0.3.0",
       "min_companion_version": "0.1.2",
@@ -39,7 +39,7 @@
     },
     {
       "id": "ifs-scenario-builder",
-      "name": "Create Scenario",
+      "name": "Scenario Builder",
       "description": "Turn a scenario description into an IFs scenario file. This tool is still planned.",
       "status": "coming-soon"
     }
