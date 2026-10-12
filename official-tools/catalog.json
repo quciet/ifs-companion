@@ -5,16 +5,16 @@
       "id": "ifs-model-vetting",
       "name": "IFs Vetting",
       "description": "Compare IFs runfiles and inspect differences, charts, and trajectory audits. Included with Companion; install this package for independent tool updates.",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "min_companion_version": "0.1.0",
       "api_version": 1,
       "platform": "win-x64",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/comparison-v0.1.2/ifs-model-vetting-0.1.2-win-x64.ifstool",
-      "sha256": "3422e403cf80e15e79b922988b7169b1fcff8c6f5a73f48c69623e37d5ffb1df",
-      "size": 64188200,
-      "installed_size": 142361877,
-      "released_at": "2026-10-10",
-      "release_notes": "Fix Select core indicators to update the selected/shared count and submitted comparison indicators together. The preset selects all available shared core indicators, including those currently hidden by search.\n"
+      "url": "https://github.com/quciet/ifs-companion/releases/download/comparison-v0.2.0/ifs-model-vetting-0.2.0-win-x64.ifstool",
+      "sha256": "acc739eac3082d9e49d33994775b69ac2d79e66e6b902acf4f26b11dc4d14b7a",
+      "size": 64197808,
+      "installed_size": 142374103,
+      "released_at": "2026-10-12",
+      "release_notes": "Baseline-anchored multiple comparison runs. Compare each selected run independently within the baseline calendar years, report missing and excluded periods, display year coverage, and overlay all trajectories and differences on the baseline horizon. Preserve saved single-run reports and Stop behavior. Indicators can be available in only some comparisons; incompatible pairs skip independently. CSV and SVG exports identify runs.\n"
     },
     {
       "id": "ifs-autotune",
