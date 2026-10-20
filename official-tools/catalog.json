@@ -49,8 +49,17 @@
     {
       "id": "ifs-scenario-builder",
       "name": "Scenario Builder",
-      "description": "Turn a scenario description into an IFs scenario file. This tool is still planned.",
-      "status": "coming-soon"
+      "version": "0.1.0",
+      "min_companion_version": "0.2.1",
+      "api_version": 1,
+      "platform": "win-x64",
+      "sha256": "5401ec66934f8bdf7772a7edd14755f2e01e40a178a284dcc5a1c7199f3a194b",
+      "size": 11341050,
+      "installed_size": 24505397,
+      "released_at": "2026-10-20",
+      "release_notes": "Optional AI-assisted .sce creation and editing. Unified chat, attachments, parameter/country/subgroup graph inspector, shared AI settings and installation metadata, and descriptive generation comments.",
+      "description": "Optional AI-assisted .sce creation and editing with attachments, graph inspection and descriptive comments. Install separately; not included with Companion.",
+      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.1.0/ifs-scenario-builder-0.1.0-win-x64.ifstool"
     }
   ]
 }

@@ -10,8 +10,6 @@ from tool_manager import ToolManager, MAX_UPLOAD
 from official_tools import OfficialTools
 import ai_settings
 import storage
-from scenario_compiler import References
-from scenario_service import ScenarioService
 from installation_validation import validate_installation
 from urllib.parse import urlparse, parse_qs
 
@@ -24,13 +22,6 @@ if not getattr(sys, 'frozen', False):
 import app
 
 class Handler(app.Handler):
-    def scenarios(self):
-        # app.LOCK also guards lazy construction under concurrent HTTP requests.
-        with app.LOCK:
-            if not hasattr(self.server, 'scenarios'):
-                self.server.scenarios = ScenarioService(app.DATA_ROOT, app.saved_installation)
-        return self.server.scenarios
-
     def tools(self):
         if not hasattr(self.server, 'tools'):
             self.server.tools = ToolManager(app.DATA_ROOT / 'companion')
@@ -43,10 +34,6 @@ class Handler(app.Handler):
             with app.LOCK:
                 if any(j['status'] == 'running' for j in app.JOBS.values()):
                     raise ValueError('Wait for the current comparison to finish before changing this tool.')
-
-    def scenario_references(self):
-        # Resolve on each operation so changing Settings never reuses stale metadata.
-        return References.from_installation(app.saved_installation())
 
     def official(self):
         if not hasattr(self.server, 'official_tools'):
@@ -128,13 +115,8 @@ class Handler(app.Handler):
 
     def do_GET(self):
         path = urlparse(self.path).path
-        if path == '/api/scenario/download':
-            try:
-                self.tool_access()
-                identity = parse_qs(urlparse(self.path).query).get('id', [''])[0]
-                return self.send(self.scenarios().download(identity), 'application/octet-stream')
-            except (ValueError, OSError) as error:
-                return self.send({'error': str(error)}, status=400)
+        if path.startswith('/api/scenario/') or path in ('/scenario.js', '/scenario.css'):
+            return self.send({'error': 'Install Scenario Builder from Manage tools.'}, status=404)
         if path == '/api/storage':
             try:
                 self.tool_access()
@@ -165,22 +147,13 @@ class Handler(app.Handler):
                 return self.send({**app.installation_layout(installation), **metadata})
             except (ValueError, OSError) as error:
                 return self.send({'error': str(error)}, status=400)
-        if path == '/api/scenario/references':
-            try:
-                self.tool_access()
-                refs = self.scenario_references()
-                return self.send({'parameters': {name: flags for name, flags in refs.parameters.items() if name == name.lower()},
-                                  'groups': refs.groups, 'countries': sorted(refs.countries)})
-            except (ValueError, OSError) as error:
-                return self.send({'error': str(error)}, status=400)
         if path == '/api/status':
-            return self.send({'running': any(j['status'] == 'running' for j in app.JOBS.values()) or self.tools().busy() or self.official().progress()['status'] in ('checking','downloading','verifying','installing') or (hasattr(self.server, 'scenarios') and self.server.scenarios.busy())})
+            return self.send({'running': any(j['status'] == 'running' for j in app.JOBS.values()) or self.tools().busy() or self.official().progress()['status'] in ('checking','downloading','verifying','installing')})
         if path == '/assets/app-icon.png':
             return self.send((ROOT/'assets/app-icon.png').read_bytes(), 'image/png')
-        if path in ('/', '/shell.js', '/shell.css', '/scenario.js', '/scenario.css'):
+        if path in ('/', '/shell.js', '/shell.css'):
             filename = 'shell.html' if path == '/' else path[1:]
-            content = {'shell.html':'text/html', 'shell.js':'text/javascript', 'shell.css':'text/css',
-                       'scenario.js':'text/javascript', 'scenario.css':'text/css'}[filename]
+            content = {'shell.html':'text/html', 'shell.js':'text/javascript', 'shell.css':'text/css'}[filename]
             body = (ROOT/filename).read_bytes()
             if filename == 'shell.html':
                 self.tools()
@@ -208,20 +181,8 @@ class Handler(app.Handler):
         return super().do_GET()
 
     def do_POST(self):
-        if self.path in ('/api/scenario/chat', '/api/scenario/export', '/api/scenario/preview'):
-            try:
-                self.tool_access(mutate=True)
-                size = int(self.headers.get('Content-Length', 0))
-                if not 0 < size <= 1_200_000:
-                    raise ValueError('Scenario request exceeds the 1 MB attachment limit.')
-                request = json.loads(self.rfile.read(size))
-                if not isinstance(request, dict):
-                    raise ValueError('Invalid scenario request.')
-                service = self.scenarios()
-                action = self.path.rsplit('/', 1)[-1]
-                return self.send(getattr(service, action)(request))
-            except (ValueError, OSError, KeyError, TypeError, ArithmeticError) as error:
-                return self.send({'error': str(error)}, status=400)
+        if self.path.startswith('/api/scenario/'):
+            return self.send({'error': 'Install Scenario Builder from Manage tools.'}, status=404)
         if self.path == '/api/storage':
             try:
                 self.tool_access(mutate=True)

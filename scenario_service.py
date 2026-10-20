@@ -118,16 +118,23 @@ def expand_entries(entries, base_year):
 
 
 class ScenarioService:
-    def __init__(self, data_root, installation, requester=request_model):
+    def __init__(self, data_root, installation, requester=request_model, settings_file=None):
         self.data_root = Path(data_root)
         self.installation = installation
         self.requester = requester
+        self.settings_file = Path(settings_file) if settings_file else self.data_root/'companion/ai-settings.json'
         self.sessions = {}
         self.lock = threading.RLock()
 
     def busy(self):
         with self.lock:
             return any(session['busy'] for session in self.sessions.values())
+
+    def cancel(self):
+        with self.lock:
+            for session in self.sessions.values():
+                session['cancelled'] = True
+                session['draft'] = None
 
     def context(self):
         root = self.installation()
@@ -148,7 +155,7 @@ class ScenarioService:
         if not isinstance(text, str) or not text.strip() or len(text) > 16000:
             raise ValidationError('Enter a scenario message shorter than 16,000 characters.')
         refs, definitions, context, digest = self.context()
-        settings = ai_settings.load(self.data_root/'companion/ai-settings.json', secret=True)
+        settings = ai_settings.load(self.settings_file, secret=True)
         if not settings['configured']:
             raise ValidationError('Set up the shared AI connection in Settings first.')
         compiler = Compiler(refs, context['base_year'])
@@ -181,6 +188,7 @@ class ScenarioService:
                 session = {'history': [], 'source': rows, 'digest': digest, 'busy': False, 'draft': None}
                 self.sessions[identity] = session
             session['busy'] = True
+            session['cancelled'] = False
             session['draft'] = None  # New input always invalidates the old review/export token.
         try:
             source = session['source']
@@ -194,6 +202,8 @@ class ScenarioService:
                 if len(json.dumps(messages)) > 300_000:
                     raise ValidationError('This scenario conversation is too large. Start a new chat or use a smaller source.')
                 answer = self.requester(settings, messages)
+                if session.get('cancelled'):
+                    raise ValidationError('Scenario request stopped.')
                 if not isinstance(answer, dict) or answer.get('role') != 'assistant':
                     raise ValidationError('AI provider returned an invalid assistant message.')
                 messages.append(answer)
@@ -251,6 +261,8 @@ class ScenarioService:
             except (KeyError, TypeError, ValueError, ArithmeticError) as exc:
                 raise ValidationError('The AI proposal could not be validated. No draft was accepted. ' + str(exc)) from None
             with self.lock:
+                if session.get('cancelled'):
+                    raise ValidationError('Scenario request stopped.')
                 session['history'].extend([{'role': 'user', 'content': text}, {'role': 'assistant', 'content': content}])
                 session['draft'] = draft
             return {'session': identity, 'reply': reply['reply'], 'draft': None if draft is None else draft['review'], 'context': context}

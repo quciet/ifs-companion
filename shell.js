@@ -23,12 +23,12 @@ $('stopTool').onclick=async()=>{
   catch(error){status(error);}finally{button.disabled=false;button.textContent='Stop';updateToolControls();}
 };
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===activeToolFrame()?.contentWindow&&event.data?.type==='tool-navigation')updateToolControls();});
-function navigate(view){if(view==='compare'&&!comparisonEnabled){view='manage';toolMessage('Install Model Vetting to use this tool.');}currentView=view; if(view==='manage'){refreshTools().then(renderOfficialTools).catch(status);loadOfficialTools(true);}if(view==='compare'&&frame.getAttribute('src')==='about:blank')frame.src='/compare';const target=['companion','compare','settings','manage','optional','scenario'].includes(view)?view:'unavailable';for(const id of ['companion','compare','settings','manage','optional','scenario','unavailable'])$(id+'View').classList.toggle('hidden',id!==target);$('viewTitle').textContent=names[view];$('newChat').classList.toggle('hidden',view!=='companion');document.querySelector('[data-view="companion"]').classList.toggle('active',view==='companion');$('unavailableTitle').textContent=names[view];updateToolControls();}
+function navigate(view){if(view==='compare'&&!comparisonEnabled){view='manage';toolMessage('Install Model Vetting to use this tool.');}currentView=view; if(view==='manage'){refreshTools().then(renderOfficialTools).catch(status);loadOfficialTools(true);}if(view==='compare'&&frame.getAttribute('src')==='about:blank')frame.src='/compare';const target=['companion','compare','settings','manage','optional'].includes(view)?view:'unavailable';for(const id of ['companion','compare','settings','manage','optional','unavailable'])$(id+'View').classList.toggle('hidden',id!==target);$('viewTitle').textContent=names[view];$('newChat').classList.toggle('hidden',view!=='companion');document.querySelector('[data-view="companion"]').classList.toggle('active',view==='companion');$('unavailableTitle').textContent=names[view];updateToolControls();}
 document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>navigate(button.dataset.view));
 document.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{$('prompt').value=button.dataset.prompt;$('prompt').focus();});
 function message(content,reply=false){const element=document.createElement('div');element.className='message'+(reply?' reply':'');element.textContent=content;$('messages').append(element);$('welcome').classList.add('hidden');$('messages').classList.remove('hidden');element.scrollIntoView({block:'nearest'});return element;}
 function action(parent,label,callback){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=callback;parent.append(button);}
-$('composer').onsubmit=event=>{event.preventDefault();const prompt=$('prompt').value.trim();if(!prompt)return;if(/scenario|\.sce|agricultural investment/i.test(prompt)){window.scenarioChat.start(prompt);return;}message(prompt);$('prompt').value='';if(/compar|runfiles?|run\.db/i.test(prompt)){const reply=message('Open Model Vetting to select the two runfiles, variables, and tolerances. The comparison uses the existing IFs model-vetting engine.',true);action(reply,'Open Model Vetting',()=>navigate('compare'));}else{const reply=message('Use Code Interpreter for source-grounded model questions. Open Scenario Builder to create or modify a scenario.',true);const codeTool=installedTools.find(t=>t.id==='ifs-code-reader');action(reply,codeTool?'Open Code Interpreter':'Manage tools',()=>codeTool?openTool(codeTool):navigate('manage'));}};
+$('composer').onsubmit=event=>{event.preventDefault();const prompt=$('prompt').value.trim();if(!prompt)return;if(/scenario|\.sce|agricultural investment/i.test(prompt)){const tool=installedTools.find(t=>t.id==='ifs-scenario-builder');if(tool){openTool(tool);return;}const reply=message('Install Scenario Builder from Manage tools to create or modify .sce files.',true);action(reply,'Manage tools',()=>navigate('manage'));return;}message(prompt);$('prompt').value='';if(/compar|runfiles?|run\.db/i.test(prompt)){const reply=message('Open Model Vetting to select the two runfiles, variables, and tolerances. The comparison uses the existing IFs model-vetting engine.',true);action(reply,'Open Model Vetting',()=>navigate('compare'));}else{const reply=message('Use Code Interpreter for source-grounded model questions. Open Scenario Builder to create or modify a scenario.',true);const codeTool=installedTools.find(t=>t.id==='ifs-code-reader');action(reply,codeTool?'Open Code Interpreter':'Manage tools',()=>codeTool?openTool(codeTool):navigate('manage'));}};
 $('newChat').onclick=()=>{$('messages').replaceChildren();$('messages').classList.add('hidden');$('welcome').classList.remove('hidden');$('prompt').value='';navigate('companion');};
 // Expansion preferences survive the randomly assigned local engine port.
 async function preferences(){try{const data=await api('/api/ui-preferences');for(const id of ['toolsGroup','recentGroup'])$(id).open=Boolean(data[id]);}catch(error){status(error);}for(const id of ['toolsGroup','recentGroup'])$(id).addEventListener('toggle',()=>{api('/api/ui-preferences',{toolsGroup:$('toolsGroup').open,recentGroup:$('recentGroup').open}).catch(status);});}
@@ -130,7 +130,6 @@ $('toolPackage').onchange=async()=>{
   }catch(error){toolMessage(error.message,true);}finally{toolBusy=false;$('installTool').disabled=false;renderOfficialTools();}
 };
 async function openTool(tool){
-  if(tool.id==='ifs-scenario-builder'){navigate('scenario');return;}
   if(tool.id==='ifs-model-vetting'){navigate('compare');return;}
   try{status(null);$('viewTitle').textContent='Opening '+tool.name+'…';const result=await api('/api/tools/open',{id:tool.id});
     let target=toolFrames.get(tool.id);
@@ -146,7 +145,7 @@ function compareVersion(a,b){const [ac,ap]=a.split('-'),[bc,bp]=b.split('-'),x=a
 const includedTools=[
   {id:'ifs-model-vetting',name:'Model Vetting',description:'Compare IFs runfiles and inspect differences.',included:true},
   {id:'ifs-code-reader',name:'Code Interpreter',description:'Explore the model and its relationships.',status:'coming-soon'},
-  {id:'ifs-scenario-builder',name:'Scenario Builder',description:'Create or modify scenarios using chat and optional .sce attachments.',included:true}
+  {id:'ifs-scenario-builder',name:'Scenario Builder',description:'Create or modify scenarios using chat and optional .sce attachments.',status:'coming-soon'}
 ];
 function directoryTools(){
   const merged=new Map(includedTools.map(tool=>[tool.id,{...tool,official:{...tool,status:'coming-soon'},included:tool.included&&(tool.id!=='ifs-model-vetting'||comparisonEnabled)}]));
@@ -221,9 +220,7 @@ function renderOfficialTools(){
     const trigger=document.createElement('summary');trigger.textContent=ready?'\u2026':'+';trigger.setAttribute('aria-label',(ready?'Manage ':'Add ')+tool.name);
     const items=document.createElement('div');items.className='tool-menu-items';
     function option(label,callback,disabled=false){action(items,label,()=>{menu.open=false;callback();});items.lastElementChild.disabled=toolBusy||disabled;}
-    if(tool.id==='ifs-scenario-builder'){
-      option('Open',()=>navigate('scenario'));
-    }else if(ready){
+    if(ready){
       if(official)option('Update',()=>installOfficial(official),!newer);
       option('Update from file',()=>chooseTool(tool.id));
       option('Uninstall',()=>uninstallTool(installed||tool));items.lastElementChild.className='danger';

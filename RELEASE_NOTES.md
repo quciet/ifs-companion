@@ -1,30 +1,21 @@
-# IFsCompanion 0.2.0
+# IFsCompanion 0.2.1
 
 Released October 20, 2026.
 
-Scenario Builder is now included. Use one chat to create a scenario or attach an
-existing UTF-8 `.sce` file to inspect and modify it. It uses the shared AI connection
-in Settings and validates proposals against the selected IFs installation.
+Model Vetting is the only tool included by default. Scenario Builder is now a
+separate optional `.ifstool` download, consistent with Code Interpreter and
+Autotune. Install it through Settings > Manage tools; it appears in Tools only
+after installation. The Companion distribution excludes its UI and compiler.
 
-- Review a compact proposal summary and open the optional graph inspector to
-  filter by parameter, country and subgroup. Global parameters have no country
-  selector. For edits, compare original and proposed input trajectories.
-- View the draft file before saving. Exports preserve the source file and include
-  creation time, purpose, exact parameter names, model context and a descriptive
-  regeneration prompt. Generated comments do not duplicate annual value arrays.
-- Shared AI settings serve Scenario Builder and Code Interpreter. API keys are
-  encrypted for the current Windows user. The provider must support Chat
-  Completions function tools for Scenario Builder.
-- Companion data defaults to a folder beside the application. Settings > Storage
-  supports moving saved data to another dedicated folder with verified migration.
-- Updated app branding and tool management, including richer release details.
+This corrects the bundling in 0.2.0. Update Companion to 0.2.1, then install
+Scenario Builder 0.1.0 if desired. Existing settings, comparisons, and previously
+generated scenarios remain untouched. Files exported with the earlier bundled
+builder remain in their original data folder; no automatic move is performed.
 
-The graph shows scenario parameter inputs, not model forecast results. Run IFs
-to inspect resulting model outcomes. Attachments are limited to 1 MB and UTF-8;
-chat sessions and unsaved drafts are cleared when Companion closes. Parameter
-metadata and requested scenario rows are sent to the configured AI provider.
+Shared AI and storage settings remain in Companion. Optional tools receive the
+current settings paths and keep their mutable files in per-tool storage.
+Scenario Builder uses the selected IFs installation and shared AI connection.
 
-Choose the Windows x64 installer or portable ZIP. Model files and an IFs
-installation are not included. The installer is unsigned; it includes the
-WebView2 bootstrapper. Portable users need WebView2 installed. Existing settings
-and saved work are preserved by updates. SHA256 checksums accompany both downloads.
+Download the Windows x64 installer or portable ZIP. Verify against SHA256SUMS.
+The installer is unsigned; the portable app requires WebView2. IFs model files
+are not included. See the separate Scenario Builder release for its tool package.

@@ -42,6 +42,13 @@ if __name__ == '__main__':
     threading.Thread(target=provider.serve_forever, daemon=True).start()
     ai_settings.save(root/'companion/ai-settings.json', {'endpoint': f'http://127.0.0.1:{provider.server_port}/v1', 'model': 'local-test-provider'})
     server = ThreadingHTTPServer(('127.0.0.1', 0), companion_server.Handler)
+    from tool_manager import ToolManager
+    import secrets
+    server.tools = ToolManager(root/'companion')
+    server.tool_token = secrets.token_urlsafe(32)
+    package = Path(__file__).resolve().parents[1]/'scenario-tool/release/ifs-scenario-builder-0.1.0-win-x64.ifstool'
+    server.tools.install(package)
+    server.tools.start('ifs-scenario-builder', Path('D:/IFs'))
     print(f'Browser fixture: http://127.0.0.1:{server.server_port}', flush=True)
     try: server.serve_forever()
-    finally: server.server_close(); provider.shutdown(); provider.server_close()
+    finally: server.tools.close(); server.server_close(); provider.shutdown(); provider.server_close()

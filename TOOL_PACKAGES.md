@@ -31,6 +31,7 @@ Companion launches the executable with no shell or package-defined arguments:
 - `IFS_TOOL_DATA_DIR` is a persistent per-tool folder under the selected Companion storage root. Never infer storage from the executable or current directory.
 - `TEMP`, `TMP`, and `TMPDIR` point to the selected storage root's `temp` folder. Use them for disposable files rather than hard-coded system paths.
 - `IFS_AI_SETTINGS_FILE` points to shared AI configuration. Read it for each new request so edits take effect without a restart. Endpoint and model are plain text; `protected_key` is base64 current-user Windows DPAPI ciphertext. Do not return the decrypted key to the browser, log it, or copy it into tool data. An absent file means AI is not configured.
+- `IFS_SETTINGS_FILE` points to Companion shared settings.json (Companion 0.2.1+). Read it per operation to use installation changes without restarting the tool.
 - `IFS_INSTALLATION` is the shared IFs folder at launch, if configured.
 - `IFS_TOOL_TOKEN` is a random per-launch secret. Require it in the
   `X-IFs-Tool-Token` header on **every** local service request.

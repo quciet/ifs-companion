@@ -9,7 +9,7 @@ IFsCompanion is a Windows desktop workspace for working with International Futur
 - **Return to saved work:** reopen saved comparisons from Recent Work.
 - **Manage tools:** install optional tools and check for tool updates from within the app.
 
-Model Vetting is included and works without an AI connection or API key. Scenario Builder is included: describe a new scenario or attach a UTF-8 `.sce` file, review proposed changes, and save a new file with descriptive comments. It uses the shared AI connection in Settings. The main Companion chat remains guided. Code Interpreter can be installed from its separate `.ifstool` package. Configure the shared Chat Completions-compatible provider under Settings > AI connection. Autotune can be installed from a separate tool package; online installation is coming soon.
+Model Vetting is included and works without an AI connection or API key. Model Vetting is the only included tool. Scenario Builder is an optional `.ifstool` package: install it from Manage tools to create or modify scenarios using the shared AI connection. The main Companion chat remains guided. Code Interpreter can be installed from its separate `.ifstool` package. Configure the shared Chat Completions-compatible provider under Settings > AI connection. Autotune can be installed from a separate tool package; online installation is coming soon.
 
 ## Download and install
 
@@ -74,36 +74,20 @@ Report problems or suggest improvements through [GitHub Issues](https://github.c
 
 IFsCompanion is available under the [MIT License](LICENSE). See [Third-party notices](THIRD_PARTY_NOTICES.txt) for bundled software acknowledgments.
 
-## Scenario Builder
+## Optional Scenario Builder
 
-Open **Tools > Scenario Builder**. Select the IFs installation and configure the
-shared AI connection in Settings first. The provider must support Chat Completions
-function tools. Parameter names, dimensions, subgroup indices, country spellings,
-model version and base year come from the selected installation.
+Scenario Builder is distributed separately from Companion as a versioned
+`.ifstool` download. It is not installed or bundled by default. Requires Companion
+0.2.1 or newer. Open Settings > Manage tools, find Scenario Builder, and install
+from the official catalog or choose Add from file. Then open it from Tools.
 
-Use the same chat to create scenarios, inspect attached scenarios, or request
-changes. **Attach .sce** selects a local UTF-8 file up to 1 MB; replacing or removing
-it clears the conversation and unsaved draft. Relevant rows and metadata are sent
-to the configured AI provider only when you send a message. Original files are
-not modified. Chat and draft state are temporary and cleared on restart.
+It reads the selected IFs installation and shared AI connection from Companion
+Settings on each request. The provider must support Chat Completions function
+tools. Use one chat to create a scenario or attach a UTF-8 `.sce` file up to 1 MB.
+Inspect parameter/country/subgroup graphs, original versus proposed inputs, annual
+values, and the draft file before saving a distinct file with descriptive comments.
 
-Review the compact proposal summary in the full-width conversation. Open
-**Inspect scenario** for a parameter and country/subgroup filtered graph of annual
-scenario input values. Global parameters disable the country selector. For edits,
-the graph overlays original and proposed values and lists only changed trajectories.
-Annual tables are created on demand for the current selection. **View draft file**
-opens the exact CSV-formatted draft with descriptive comments without saving; its
-creation timestamp is finalized on export. The source attachment also has a
-**View file** action. New input invalidates the previous draft;
-changing the IFs installation requires a fresh chat. Click **Save reviewed .sce**
-to save under `scenarios` in the active Companion data folder, then download a
-copy if desired. Existing filenames are never overwritten. The generated comment
-section includes creation time, purpose, exact parameter names, model context and
-a descriptive regeneration prompt. It contains no generated structured
-specification or duplicate annual value array. Existing source comments remain.
-
-Supported plans include explicit annual trajectories, linear ramps with optional
-holds, and changes by multiplication, addition, zeroing or a linear replacement
-over an existing interval. The local compiler validates every accepted proposal;
-AI text is never executed as code. AI requests can take several minutes when
-multiple metadata lookups are needed. Provider failures never export a file.
+Tool data and generated files live under the per-tool storage folder, separately
+from program files. Uninstall preserves that data. See
+[Scenario Builder usage](scenario-tool/README.md) for full details and the build
+command. Only Model Vetting works without installing an optional tool.

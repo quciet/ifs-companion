@@ -86,6 +86,6 @@
     catch(error){note(error.message,true);}finally{setBusy(false);el('scenarioPrompt').focus();}
   };
   el('scenarioSave').onclick=async()=>{if(busy||!draft)return;const filename=el('scenarioFilename').value.trim();setBusy(true);note('Saving reviewed scenario…');try{const result=await api('/api/scenario/export',{session,draft:draft.id,filename});const parent=el('scenarioExportResult');parent.replaceChildren();const text=document.createElement('p');text.textContent='Saved: '+result.path;const link=document.createElement('a');link.href=result.download;link.download=result.filename;link.textContent='Download .sce';parent.append(text,link);note('Saved with descriptive comments. Existing files were not overwritten.');}catch(error){note(error.message,true);}finally{setBusy(false);}};
-  window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;el('scenarioPrompt').focus();}};
+  window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;el('scenarioPrompt').focus();},stopReset(){const prompt=el('scenarioPrompt').value;reset();el('scenarioPrompt').value=prompt;}};
   reset();
 })();

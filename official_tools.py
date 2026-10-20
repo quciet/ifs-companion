@@ -10,7 +10,7 @@ import zipfile
 from tool_manager import MAX_UPLOAD, manifest, release_metadata
 
 CATALOG_URL = 'https://raw.githubusercontent.com/quciet/ifs-companion/main/official-tools/catalog.json'
-COMPANION_VERSION = (0, 2, 0)
+COMPANION_VERSION = (0, 2, 1)
 RELEASE_PREFIX = 'https://github.com/quciet/ifs-companion/releases/download/'
 
 def version(text):
@@ -25,7 +25,7 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
 def open_url(url):
-    request=urllib.request.Request(url,headers={'User-Agent':'IFsCompanion/0.2.0','Cache-Control':'no-cache'})
+    request=urllib.request.Request(url,headers={'User-Agent':'IFsCompanion/0.2.1','Cache-Control':'no-cache'})
     return urllib.request.build_opener(SafeRedirect()).open(request,timeout=30)
 
 def validate_catalog(document):

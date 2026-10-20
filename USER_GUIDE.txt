@@ -44,7 +44,7 @@ Code Interpreter is available as a separate tool package for Companion 0.1.2 or 
    or file fingerprints; they do not prove compatibility with your installed IFs.
 Back and Stop preserve selections and saved answers. Updates and uninstall preserve
 this tool's data. Rebuild the index after changing source files or updating the bundle.
-The main Companion chat remains guided. Tools > Scenario Builder uses the shared AI connection to create or modify scenarios. Attach an optional UTF-8 .sce file, review the draft and annual values, then save a new file. Saved files are in the Companion data folder under scenarios. See README.md for details.
+The main Companion chat remains guided. Scenario Builder is optional: install its .ifstool package through Manage tools, then open Tools > Scenario Builder. It uses the shared AI connection to create or modify scenarios. Attach an optional UTF-8 .sce file, review the draft and annual values, then save a new file. Saved files are in the per-tool data folder under scenarios. See README.md for details.
 The app provides numerical evidence; reviewers decide whether changes are expected.
 
 INSTALLING OPTIONAL TOOLS

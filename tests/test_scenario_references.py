@@ -7,8 +7,6 @@ import unittest
 from unittest.mock import patch
 
 from scenario_compiler import References, ValidationError
-from companion_server import Handler
-import app
 
 
 class InstallationReferenceTests(unittest.TestCase):
@@ -36,16 +34,15 @@ class InstallationReferenceTests(unittest.TestCase):
         refs.parameters['bilateral'] = (1, 1, 0)
         self.assertEqual(refs.targets('bilateral', ['Exact Country', 'Exact Country']), ['Exact Country', '7'])
 
-    def test_handler_reloads_selected_installation(self):
-        handler = object.__new__(Handler)
-        with patch.object(app, 'saved_installation', return_value=self.root):
-            self.assertEqual(handler.scenario_references().dimensions('labcoeffsm'), (1, 2, 3))
-            with closing(sqlite3.connect(self.root / 'RUNFILES/IFsVar.db')) as db, db:
-                db.execute('UPDATE IFsVar SET DIMENSION3=0')
-            self.assertEqual(handler.scenario_references().dimensions('labcoeffsm'), (1, 2, 0))
-        with patch.object(app, 'saved_installation', return_value=None):
-            with self.assertRaises(ValidationError):
-                handler.scenario_references()
+    def test_settings_reloads_selected_installation(self):
+        settings = self.root / 'shared-settings.json'
+        settings.write_text(json.dumps({'installation':str(self.root)}))
+        self.assertEqual(References.from_companion_settings(settings).dimensions('labcoeffsm'), (1,2,3))
+        with closing(sqlite3.connect(self.root / 'RUNFILES/IFsVar.db')) as db, db:
+            db.execute('UPDATE IFsVar SET DIMENSION3=0')
+        self.assertEqual(References.from_companion_settings(settings).dimensions('labcoeffsm'), (1,2,0))
+        settings.write_text(json.dumps({'installation':None}))
+        with self.assertRaises(ValidationError): References.from_companion_settings(settings)
 
     def test_missing_database_is_not_created(self):
         path = self.root / 'RUNFILES/IFsVar.db'

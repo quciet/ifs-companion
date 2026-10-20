@@ -130,7 +130,7 @@ class ToolManager:
             if release_info: meta.update(release_metadata(release_info))
             meta['installed_size'] = sum(i.file_size for i in infos)
             package.fp.seek(0, 2); meta['size'] = package.fp.tell()
-            if meta.get('min_companion_version') and version_key(meta['min_companion_version']) > version_key('0.2.0'):
+            if meta.get('min_companion_version') and version_key(meta['min_companion_version']) > version_key('0.2.1'):
                 raise ValueError('This tool requires Companion ' + meta['min_companion_version'] + ' or later.')
             identity = meta['id']
             self.before_change(identity)
@@ -198,6 +198,7 @@ class ToolManager:
             if identity == 'ifs-model-vetting':
                 env['IFS_VETTING_DATA_DIR'] = str(self.root.parent)
             env['IFS_AI_SETTINGS_FILE'] = str(self.root / 'ai-settings.json')
+            env['IFS_SETTINGS_FILE'] = str(self.root.parent / 'settings.json')
             with (data / 'tool.log').open('ab') as log:
                 process = subprocess.Popen([str(self._folder(identity) / meta['entrypoint'])],
                     cwd=self._folder(identity), env=env, stdin=subprocess.PIPE, stdout=log, stderr=log,

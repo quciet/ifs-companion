@@ -54,21 +54,17 @@ class ToolApiTests(unittest.TestCase):
         with urllib.request.urlopen(self.url+'/api/ai-settings') as response:
             self.assertEqual(json.load(response)['model'],'local-fixture')
 
-    def test_scenario_api_requires_token_and_is_not_proxied(self):
-        for path in ('/api/scenario/chat', '/api/scenario/export', '/api/scenario/preview'):
-            with self.assertRaises(urllib.error.HTTPError) as error:
-                self.post(path, b'{"message":"test"}', token=False)
-            self.assertEqual(error.exception.code, 400)
-            error.exception.close()
-        from unittest.mock import Mock
-        service = Mock()
-        service.chat.return_value = {'session': 'fixture', 'reply': 'Clarify the target.', 'draft': None}
-        with patch.object(Handler, 'scenarios', return_value=service), patch.object(Handler, 'comparison_running', return_value=True), patch.object(Handler, 'comparison_proxy', side_effect=AssertionError('Scenario belongs to Companion')):
-            result = self.post('/api/scenario/chat', b'{"message":"Double yield"}')
-            self.assertIsNone(result['draft'])
-            service.chat.assert_called_once_with({'message': 'Double yield'})
-        with urllib.request.urlopen(self.url+'/scenario.js') as response:
-            self.assertIn(b'/api/scenario/chat', response.read())
+    def test_scenario_builder_is_not_bundled(self):
+        with urllib.request.urlopen(self.url) as response: html=response.read().decode()
+        self.assertNotIn('id="scenarioView"', html)
+        self.assertNotIn('href="/scenario.css"', html)
+        self.assertNotIn('data-view="scenario"', html)
+        for path in ('/scenario.js','/api/scenario/references'):
+            with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(self.url+path)
+            self.assertEqual(error.exception.code,404);error.exception.close()
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.post('/api/scenario/chat',b'{"message":"test"}')
+        self.assertEqual(error.exception.code,404);error.exception.close()
 
     def test_storage_change_is_authenticated_and_stays_in_companion(self):
         import os
