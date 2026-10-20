@@ -12,14 +12,14 @@ included comparison engine. Uninstalling it removes comparison from the sidebar 
 Example manifest:
 
 ```json
-{"id":"ifs-autotune","name":"IFs Autotune","version":"0.1.0",
+{"id":"ifs-autotune","name":"Autotune","version":"0.1.0",
  "api_version":1,"platform":"win-x64","kind":"web-service",
  "entrypoint":"electron/IFsAutotune.exe"}
 ```
 
 The ID is stable across updates. The entry point is a relative `.exe` path.
 Do not include personal settings, working inputs, results, credentials, or source
-checkouts. Include dependency licenses and any clean starter templates needed.
+checkouts. Reviewed, versioned source snapshots for Code Interpreter are permitted; omit Git history, credentials, and build outputs. Include dependency licenses and any clean starter templates needed.
 ZIP paths may not escape their installation folder or contain links.
 
 ## Runtime contract
@@ -28,7 +28,9 @@ Companion launches the executable with no shell or package-defined arguments:
 
 - `IFS_COMPANION_MODE=1` selects embedded operation.
 - `IFS_COMPANION_PID` identifies the owning Companion process; exit when it disappears.
-- `IFS_TOOL_DATA_DIR` is a persistent per-tool folder outside program files.
+- `IFS_TOOL_DATA_DIR` is a persistent per-tool folder under the selected Companion storage root. Never infer storage from the executable or current directory.
+- `TEMP`, `TMP`, and `TMPDIR` point to the selected storage root's `temp` folder. Use them for disposable files rather than hard-coded system paths.
+- `IFS_AI_SETTINGS_FILE` points to shared AI configuration. Read it for each new request so edits take effect without a restart. Endpoint and model are plain text; `protected_key` is base64 current-user Windows DPAPI ciphertext. Do not return the decrypted key to the browser, log it, or copy it into tool data. An absent file means AI is not configured.
 - `IFS_INSTALLATION` is the shared IFs folder at launch, if configured.
 - `IFS_TOOL_TOKEN` is a random per-launch secret. Require it in the
   `X-IFs-Tool-Token` header on **every** local service request.
@@ -63,3 +65,22 @@ then show the starting screen while retaining form selections and saved results.
 Reject on failure so Companion can display an error; do not reload the iframe or
 clear user settings. Companion keeps a separate iframe for each opened tool.
 Older packages without this interface must be updated to use the Stop button.
+
+## Release information
+
+Optional tool.json fields: `released_at` (YYYY-MM-DD), `release_notes` (plain text,
+up to 8,000 characters), `min_companion_version` (major.minor.patch), and
+`installed_size` (approximate unpacked bytes). Companion preserves these fields
+for offline/file installs and calculates actual archive and unpacked byte counts
+at installation, overriding package-supplied sizes. Older packages remain valid.
+
+Tool builders accept `--release-date YYYY-MM-DD` and `--release-notes notes.txt`.
+The default date is the UTC build date. They embed notes, compatibility, and an
+unpacked-size estimate in the package, then emit a `.release.json` sidecar with
+exact archive size, unpacked size, and SHA256. Download size lives in this sidecar
+and the catalog because it cannot reliably be embedded in the archive whose
+size it describes. The package's own manifest must remain under 16 KiB.
+
+Manage tools shows a size summary and Release details. It distinguishes the
+installed version from a different latest official version. Sizes exclude saved
+work, generated indexes, and temporary installation space.

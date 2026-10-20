@@ -1,4 +1,5 @@
 """Local, self-contained IFs tool packages. User data lives outside program files."""
+from datetime import date
 import ctypes
 import json
 import os
@@ -29,6 +30,24 @@ def safe_relative(value):
             raise ValueError('Package contains a reserved Windows filename.')
     return path
 
+def release_metadata(data):
+    result = {}
+    for key, maximum in [('size', MAX_UPLOAD), ('installed_size', MAX_EXPANDED)]:
+        if key in data:
+            if type(data[key]) is not int or not 0 < data[key] <= maximum:
+                raise ValueError('Invalid release size: ' + key)
+            result[key] = data[key]
+    for key, limit in [('released_at', 10), ('release_notes', 8000), ('min_companion_version', 40)]:
+        if key not in data: continue
+        value = data[key]
+        if not isinstance(value, str) or len(value) > limit: raise ValueError('Invalid release field: ' + key)
+        if key == 'released_at':
+            if date.fromisoformat(value).isoformat() != value: raise ValueError('Invalid release date')
+        if key == 'min_companion_version' and not re.fullmatch(r'\d+\.\d+\.\d+', value):
+            raise ValueError('Invalid minimum Companion version')
+        result[key] = value
+    return result
+
 def manifest(data):
     if not isinstance(data, dict): raise ValueError('tool.json must contain an object.')
     identity = data.get('id', '')
@@ -43,7 +62,10 @@ def manifest(data):
     entry = safe_relative(data.get('entrypoint'))
     if entry.suffix.lower() != '.exe': raise ValueError('A self-contained Windows executable is required.')
     # Do not accept arbitrary commands, shell strings, or environment overrides.
-    return {key: data[key] for key in ('id', 'name', 'version', 'api_version', 'platform', 'kind', 'entrypoint')}
+    result = {key: data[key] for key in ('id', 'name', 'version', 'api_version', 'platform', 'kind', 'entrypoint')}
+    result['name'] = {'ifs-model-vetting': 'Model Vetting', 'ifs-autotune': 'Autotune', 'ifs-code-reader': 'Code Interpreter', 'ifs-scenario-builder': 'Scenario Builder'}.get(identity, result['name'])
+    result.update(release_metadata(data))
+    return result
 
 def version_key(value):
     core, _, prerelease = value.partition('-')
@@ -90,7 +112,7 @@ class ToolManager:
                 except (ValueError, OSError): continue
             return result
 
-    def install(self, archive, expected_id=None, official_sha256=None, allow_older=False):
+    def install(self, archive, expected_id=None, official_sha256=None, allow_older=False, release_info=None):
         with self.lock, zipfile.ZipFile(archive) as package:
             infos = package.infolist()
             if len(infos) > 100000 or sum(i.file_size for i in infos) > MAX_EXPANDED:
@@ -105,6 +127,11 @@ class ToolManager:
             info = package.getinfo('tool.json')
             if info.file_size > 16384: raise ValueError('Invalid tool manifest.')
             meta = manifest(json.loads(package.read(info)))
+            if release_info: meta.update(release_metadata(release_info))
+            meta['installed_size'] = sum(i.file_size for i in infos)
+            package.fp.seek(0, 2); meta['size'] = package.fp.tell()
+            if meta.get('min_companion_version') and version_key(meta['min_companion_version']) > version_key('0.2.0'):
+                raise ValueError('This tool requires Companion ' + meta['min_companion_version'] + ' or later.')
             identity = meta['id']
             self.before_change(identity)
             if official_sha256: meta['official_sha256'] = official_sha256
@@ -170,6 +197,7 @@ class ToolManager:
                        IFS_TOOL_READY_FILE=str(ready), IFS_TOOL_TOKEN=token, IFS_INSTALLATION=str(installation) if installation else '')
             if identity == 'ifs-model-vetting':
                 env['IFS_VETTING_DATA_DIR'] = str(self.root.parent)
+            env['IFS_AI_SETTINGS_FILE'] = str(self.root / 'ai-settings.json')
             with (data / 'tool.log').open('ab') as log:
                 process = subprocess.Popen([str(self._folder(identity) / meta['entrypoint'])],
                     cwd=self._folder(identity), env=env, stdin=subprocess.PIPE, stdout=log, stderr=log,

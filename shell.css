@@ -13,3 +13,13 @@
 #stopTool{margin-left:auto;color:#9a3939}#stopTool:disabled{cursor:wait}
 
 #toolDialog{max-width:480px;width:calc(100% - 40px);border:1px solid #d5e0d8;border-radius:16px;padding:24px;color:#283c34}#toolDialog::backdrop{background:#10281f66}#toolDialog h2{font-size:21px;margin-top:0}#toolDialog p{line-height:1.6;white-space:pre-line}#toolDialog .actions{justify-content:flex-end}#toolDialogConfirm{background:#304c3f;color:white}#toolStatus:not(:empty){padding:12px;border:1px solid #d5e0d8;border-radius:8px;background:#f5f7f6}#toolStatus.error{color:#9a3939;border-color:#d7aaaa}
+
+.official-badge{position:relative;display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:5px 9px;border:0;border-radius:20px;background:#edf3f8;color:#52789c;font-size:12px;font-weight:600;line-height:1;vertical-align:middle;white-space:nowrap}.official-badge:hover,.official-badge:focus{background:#e4edf5}.official-badge svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.official-tooltip{display:none;position:absolute;top:calc(100% + 8px);left:0;z-index:20;padding:9px 12px;border-radius:7px;background:#283c34;color:#fff;box-shadow:0 4px 14px #18312526;font-size:12px;font-weight:400;line-height:1.4;pointer-events:none}.official-badge:hover .official-tooltip,.official-badge:focus .official-tooltip{display:block}
+
+.app-brand{display:flex;align-items:center;gap:9px;margin-bottom:6px}.app-brand img{flex-shrink:0;object-fit:contain}.app-brand h1{font-size:20px;margin:0}@media(max-width:1000px){.app-brand{gap:6px}.app-brand h1{font-size:18px}.app-brand img{width:30px;height:30px}}
+
+#clearAIKey{width:auto;margin-right:8px}.settings label:has(#clearAIKey){display:flex;align-items:center;margin:14px 0}
+
+#releaseDialog{max-width:620px;width:calc(100% - 40px);max-height:85vh;overflow:auto;border:1px solid #d5e0d8;border-radius:16px;padding:24px;color:#283c34}#releaseDialog::backdrop{background:#10281f66}#releaseDialog h2{font-size:22px;margin-top:0}#releaseDialog h3{font-size:16px}#releaseDialog p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}#releaseDialog form{text-align:right}.tool-size{display:block;margin-top:5px}
+
+.catalog-retry{padding:0;border:0;background:transparent;color:inherit;text-decoration:underline;font:inherit;cursor:pointer}.catalog-retry:disabled{opacity:.5;cursor:wait}

@@ -19,7 +19,7 @@ sealed class CompanionWindow : Form
 {
     readonly WebView2 view = new() { Dock = DockStyle.Fill };
     readonly Label loading = new() { Text = "Starting IFsCompanion…", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
-    readonly string dataRoot = Environment.GetEnvironmentVariable("IFS_VETTING_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "IFsModelVetting");
+    string dataRoot = Path.Combine(AppContext.BaseDirectory, "data");
     readonly string? smokeOutput;
     Process? backend;
     string? origin;
@@ -30,6 +30,7 @@ sealed class CompanionWindow : Form
     {
         smokeOutput = args.Length == 2 && args[0] == "--smoke-test" ? Path.GetFullPath(args[1]) : null;
         Text = "IFsCompanion";
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Width = 1320; Height = 920; MinimumSize = new Size(900, 650);
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(view); Controls.Add(loading);
@@ -41,16 +42,23 @@ sealed class CompanionWindow : Form
     {
         try
         {
-            Directory.CreateDirectory(dataRoot);
             // A redirected input pipe also makes the engine exit if this host crashes.
             backend = new Process { StartInfo = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "engine", "IFsCompanionEngine.exe")) {
                 UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
                 RedirectStandardOutput = true, WorkingDirectory = AppContext.BaseDirectory
             }};
+            backend.StartInfo.Environment["IFS_COMPANION_APP_DIR"] = AppContext.BaseDirectory;
             backend.Start();
-            var ready = await backend.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(60));
+            // First launch or a storage change may copy large tool packages/results.
+            loading.Text = "Preparing Companion storage…";
+            var ready = await backend.StandardOutput.ReadLineAsync();
             if (ready == null) throw new Exception("The local engine did not start. See application.log in " + dataRoot);
-            origin = JsonDocument.Parse(ready).RootElement.GetProperty("url").GetString()!;
+            using var startup = JsonDocument.Parse(ready);
+            if (startup.RootElement.TryGetProperty("error", out var startupError)) throw new Exception(startupError.GetString());
+            dataRoot = startup.RootElement.GetProperty("data_root").GetString()!;
+            origin = startup.RootElement.GetProperty("url").GetString()!;
+            foreach (var variable in new[] { "TEMP", "TMP", "TMPDIR" })
+                Environment.SetEnvironmentVariable(variable, Path.Combine(dataRoot, "temp"));
             var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataRoot, "WebView2"));
             await view.EnsureCoreWebView2Async(environment);
             view.CoreWebView2.Settings.AreDevToolsEnabled = false;
@@ -92,6 +100,9 @@ sealed class CompanionWindow : Form
                         var visible = await view.CoreWebView2.ExecuteScriptAsync("!document.getElementById('compareView').classList.contains('hidden')");
                         if (visible!="true") throw new Exception("Tool navigation failed");
                         await view.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-view=settings]').click();document.querySelector('[data-view=companion]').click();document.getElementById('toolsGroup').open=false;document.getElementById('recentGroup').open=false;");
+                        await view.CoreWebView2.ExecuteScriptAsync("document.querySelector('[data-view=settings]').click();");
+                        var storageLabel = await view.CoreWebView2.ExecuteScriptAsync("document.getElementById('storageCurrent').textContent");
+                        if (!(JsonSerializer.Deserialize<string>(storageLabel) ?? "").Contains(dataRoot)) throw new Exception("Storage setting did not display the active data folder");
                         await Task.Delay(250);
                         using (var image = File.Create(smokeOutput + ".png")) await view.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
                         File.WriteAllText(smokeOutput, JsonSerializer.Serialize(new { ok = true, heading, installation, backendPid = backend!.Id, origin }));
@@ -113,7 +124,8 @@ sealed class CompanionWindow : Form
     {
         if (closing || pickingFolder || e.Source != origin + "/") return;
         using var message = JsonDocument.Parse(e.WebMessageAsJson);
-        if (!message.RootElement.TryGetProperty("type", out var type) || type.GetString() != "select-installation") return;
+        if (!message.RootElement.TryGetProperty("type", out var type) || (type.GetString() != "select-installation" && type.GetString() != "select-storage")) return;
+        bool storageFolder = type.GetString() == "select-storage";
         var initial = message.RootElement.GetProperty("installation").GetString() ?? "";
         pickingFolder = true;
         // Leave the WebView2 callback before entering a modal Windows message loop.
@@ -121,14 +133,14 @@ sealed class CompanionWindow : Form
             try {
                 if (closing || IsDisposed) return;
                 using var dialog = new FolderBrowserDialog {
-                    Description = "Select IFs installation folder", UseDescriptionForTitle = true,
-                    SelectedPath = initial, ShowNewFolderButton = false
+                    Description = storageFolder ? "Select an empty Companion storage folder" : "Select IFs installation folder", UseDescriptionForTitle = true,
+                    SelectedPath = initial, ShowNewFolderButton = storageFolder
                 };
                 var selected = dialog.ShowDialog(this) == DialogResult.OK ? dialog.SelectedPath : null;
-                view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "installation-selected", installation = selected }));
+                view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = storageFolder ? "storage-selected" : "installation-selected", installation = selected }));
             } catch (Exception ex) {
                 if (!closing && !IsDisposed)
-                    view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "installation-selected", error = ex.Message }));
+                    view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = storageFolder ? "storage-selected" : "installation-selected", error = ex.Message }));
             } finally { pickingFolder = false; }
         }));
     }

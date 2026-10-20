@@ -10,7 +10,7 @@ class StopComparisonTests(unittest.TestCase):
     def test_stop_during_metadata_prevents_variable_work_and_report(self):
         started=threading.Event();release=threading.Event()
         def metadata(path):
-            started.set();release.wait(3);return {}
+            started.set();release.wait(3);return {'buckets': {0: {2020: '2020'}}}
         with tempfile.TemporaryDirectory() as directory, patch.object(app,'DATA_ROOT',pathlib.Path(directory)), patch.object(app,'JOBS',{'test':{'status':'running'}}), patch.object(app,'metadata',side_effect=metadata), patch.object(app,'connect',return_value=MagicMock()), patch.object(app,'decode') as decode:
             worker=threading.Thread(target=app.compare,args=('test',{'a':'a','b':'b','variables':['GDP']}))
             worker.start();self.assertTrue(started.wait(2))

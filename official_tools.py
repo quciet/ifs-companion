@@ -7,10 +7,10 @@ import threading
 import urllib.parse
 import urllib.request
 import zipfile
-from tool_manager import MAX_UPLOAD, manifest
+from tool_manager import MAX_UPLOAD, manifest, release_metadata
 
 CATALOG_URL = 'https://raw.githubusercontent.com/quciet/ifs-companion/main/official-tools/catalog.json'
-COMPANION_VERSION = (0, 1, 1)
+COMPANION_VERSION = (0, 2, 0)
 RELEASE_PREFIX = 'https://github.com/quciet/ifs-companion/releases/download/'
 
 def version(text):
@@ -25,7 +25,7 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
 def open_url(url):
-    request=urllib.request.Request(url,headers={'User-Agent':'IFsCompanion/0.1.1','Cache-Control':'no-cache'})
+    request=urllib.request.Request(url,headers={'User-Agent':'IFsCompanion/0.2.0','Cache-Control':'no-cache'})
     return urllib.request.build_opener(SafeRedirect()).open(request,timeout=30)
 
 def validate_catalog(document):
@@ -55,6 +55,7 @@ def validate_catalog(document):
         if not isinstance(row.get('sha256'),str) or not re.fullmatch('[a-f0-9]{64}',row['sha256']):raise ValueError('Missing package checksum.')
         if type(row.get('size')) is not int or not 0<row['size']<=MAX_UPLOAD:raise ValueError('Invalid package size.')
         item={key:row[key] for key in ('id','name','description','version','min_companion_version','api_version','platform','url','sha256','size')}
+        item.update(release_metadata(row))
         item['compatible']=minimum<=COMPANION_VERSION
         item['status']='available'
         result.append(item)
@@ -113,7 +114,7 @@ class OfficialTools:
                 if meta['id']!=row['id'] or meta['version']!=row['version']:
                     raise ValueError('The package does not match the official tool and version.')
                 self._state(status='installing',message='Installing '+row['name']+'…')
-                package.seek(0);self.manager.install(package,expected_id=identity,official_sha256=row['sha256'])
+                package.seek(0);self.manager.install(package,expected_id=identity,official_sha256=row['sha256'],release_info=row)
                 if identity == 'ifs-model-vetting': (self.manager.root / 'comparison-removed').unlink(missing_ok=True)
             self._state(status='complete',message=row['name']+' '+row['version']+' is ready.')
         except Exception as error:

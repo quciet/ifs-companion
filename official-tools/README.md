@@ -23,9 +23,21 @@ Only packages downloaded and verified through this catalog receive recorded
 official provenance. A local package does not become official merely by choosing
 the same tool ID. Keep Install from file available for offline and third-party use.
 
-Compare Runs stays bundled. Installing its package uses the separate engine for
+Model Vetting stays bundled. Installing its package uses the separate engine for
 comparison requests while retaining the shared report/settings folder. Close the
 separate engine in Manage tools before updating or removing it. Removing the
 package restores the included engine; reports remain available. The comparison
 engine package is built with `ifs-model-vetting/packaging/build-tool.py` after
 publishing that project's decoder.
+
+## Release metadata
+
+Use each builder's `--release-notes notes.txt` and optional `--release-date`
+arguments. Its `.release.json` output supplies `size`, `installed_size`,
+`released_at`, `release_notes`, `min_companion_version`, and `sha256`. Copy these
+fields into the tool's catalog entry alongside the versioned download URL, and
+include them in the GitHub release description. Keep notes as plain text.
+For an existing published release, derive sizes from those exact published bytes
+and the date from its GitHub publication timestamp. Do not rebuild or replace
+published assets just to add metadata. Older packages can receive matching-version
+release details from the online catalog.

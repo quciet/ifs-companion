@@ -1,4 +1,7 @@
-#define AppVersion "0.1.1"
+#define AppVersion "0.2.0"
+#ifndef DistributionDir
+  #define DistributionDir "..\dist\IFsCompanion"
+#endif
 [Setup]
 AppId={{36E1A6E2-60A5-47D0-A947-11A716ED46B6}
 AppName=IFsCompanion
@@ -14,6 +17,7 @@ OutputBaseFilename=IFsCompanion-Setup-{#AppVersion}-win-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\assets\app-icon.ico
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
 InfoBeforeFile=INSTALLATION_NOTICE.txt
@@ -21,7 +25,7 @@ UninstallDisplayIcon={app}\IFsCompanion.exe
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 [Files]
-Source: "..\dist\IFsCompanion\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#DistributionDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "data\*,storage.json"
 Source: "..\build-tools\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
 [InstallDelete]
 Type: files; Name: "{userdesktop}\IFs Model Vetting.lnk"

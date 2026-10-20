@@ -44,4 +44,43 @@ class ToolApiTests(unittest.TestCase):
             self.assertEqual(error.exception.code,400)
             error.exception.close()
 
+    def test_shared_ai_settings_are_authenticated_and_do_not_echo_key(self):
+        request=json.dumps({'endpoint':'http://127.0.0.1:12345/v1','model':'local-fixture'}).encode()
+        with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/ai-settings',request,token=False)
+        error.exception.close()
+        result=self.post('/api/ai-settings',request)
+        self.assertTrue(result['configured'])
+        self.assertNotIn('api_key',result)
+        with urllib.request.urlopen(self.url+'/api/ai-settings') as response:
+            self.assertEqual(json.load(response)['model'],'local-fixture')
+
+    def test_scenario_api_requires_token_and_is_not_proxied(self):
+        for path in ('/api/scenario/chat', '/api/scenario/export', '/api/scenario/preview'):
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                self.post(path, b'{"message":"test"}', token=False)
+            self.assertEqual(error.exception.code, 400)
+            error.exception.close()
+        from unittest.mock import Mock
+        service = Mock()
+        service.chat.return_value = {'session': 'fixture', 'reply': 'Clarify the target.', 'draft': None}
+        with patch.object(Handler, 'scenarios', return_value=service), patch.object(Handler, 'comparison_running', return_value=True), patch.object(Handler, 'comparison_proxy', side_effect=AssertionError('Scenario belongs to Companion')):
+            result = self.post('/api/scenario/chat', b'{"message":"Double yield"}')
+            self.assertIsNone(result['draft'])
+            service.chat.assert_called_once_with({'message': 'Double yield'})
+        with urllib.request.urlopen(self.url+'/scenario.js') as response:
+            self.assertIn(b'/api/scenario/chat', response.read())
+
+    def test_storage_change_is_authenticated_and_stays_in_companion(self):
+        import os
+        import storage
+        with tempfile.TemporaryDirectory() as appdir, tempfile.TemporaryDirectory() as destination, patch.object(storage, 'app_directory', return_value=Path(appdir)), patch.dict(os.environ, {'IFS_VETTING_DATA_DIR': ''}):
+            request=json.dumps({'location':destination}).encode()
+            with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/storage',request,token=False)
+            error.exception.close()
+            result=self.post('/api/storage',request)
+            self.assertEqual(Path(result['pending']),Path(destination).resolve())
+            with patch.object(Handler,'comparison_running',return_value=True), patch.object(Handler,'comparison_proxy',side_effect=AssertionError('Storage belongs to Companion')):
+                with urllib.request.urlopen(self.url+'/api/storage') as response:
+                    self.assertEqual(json.load(response)['current'],str(app.DATA_ROOT))
+
 if __name__=='__main__':unittest.main()

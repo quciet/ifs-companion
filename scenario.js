@@ -1,0 +1,91 @@
+'use strict';
+(()=>{
+  let session=null,source=null,draft=null,busy=false,selectedRow=null;
+  const el=id=>document.getElementById(id);
+  const controls=['scenarioSend','scenarioAttach','scenarioReplace','scenarioRemove','scenarioNew','scenarioSave','scenarioViewFile'];
+  function setBusy(value){busy=value;for(const id of controls)el(id).disabled=value;el('scenarioSend').textContent=value?'Thinking…':'Send ↑';}
+  function note(text,error=false){el('scenarioStatus').textContent=text;el('scenarioStatus').classList.toggle('scenario-error',error);}
+  function message(text,role){const div=document.createElement('div');div.className='scenario-message '+role;div.textContent=text;el('scenarioMessages').append(div);div.scrollIntoView({block:'nearest'});}
+  function resetDraft(){draft=null;selectedRow=null;el('scenarioSummary').hidden=true;el('scenarioExportResult').replaceChildren();el('scenarioInspector').close();el('scenarioFileDialog').close();el('scenarioFileText').textContent='';}
+  function reset(){session=null;resetDraft();el('scenarioMessages').replaceChildren();el('scenarioPrompt').value='';message(source?'Scenario attached. Ask me to inspect it, explain its assumptions, or propose changes.':'Describe a new scenario, or attach a .sce file to inspect or modify.','assistant');note('');}
+  function sourceChip(){el('scenarioSource').hidden=!source;el('scenarioSourceName').textContent=source?.name||'';}
+  el('scenarioAttach').onclick=el('scenarioReplace').onclick=()=>el('scenarioFile').click();
+  el('scenarioFile').onchange=async()=>{
+    const file=el('scenarioFile').files[0];if(!file||busy)return;
+    if(!file.name.toLowerCase().endsWith('.sce')||file.size>1_000_000){note('Choose a .sce file smaller than 1 MB.',true);return;}
+    if((draft||session)&&!await confirmTool('Replace scenario source?','The working draft and conversation will be cleared. Previously saved scenario files remain available.','Replace'))return;
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    let text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{note('This file is not UTF-8. Convert a copy to UTF-8 before attaching it.',true);return;}
+    source={name:file.name,text};sourceChip();reset();note('Attached locally. Relevant scenario rows will be sent to your AI provider when you send a message.');el('scenarioFile').value='';
+  };
+  el('scenarioRemove').onclick=async()=>{if((draft||session)&&!await confirmTool('Remove scenario source?','This clears the conversation and working draft. Your original file is unchanged.','Remove'))return;source=null;sourceChip();reset();};
+  el('scenarioNew').onclick=async()=>{if((draft||session)&&!await confirmTool('Start a new scenario chat?','This clears the conversation, attachment and unsaved draft. Saved files remain available.','New chat'))return;source=null;sourceChip();reset();};
+  function renderDraft(value){resetDraft();draft=value;if(!draft)return;
+    const parameters=new Set(draft.rows.map(r=>r.parameter)),countries=new Set();let global=false;
+    for(const row of draft.rows){const flags=draft.dimensions[row.parameter];if(flags[0]===1)countries.add(row.targets[0]);else if(flags[0]===0)global=true;}
+    const start=Math.min(...draft.rows.map(r=>r.changed_start_year)),end=Math.max(...draft.rows.map(r=>r.changed_end_year));
+    el('scenarioSummaryCounts').textContent=[parameters.size+' parameter'+(parameters.size===1?'':'s'),...(countries.size?[countries.size+' countr'+(countries.size===1?'y':'ies')]:[]),...(global?['Global inputs']:[]),start+'–'+end,draft.rows.length+' trajector'+(draft.rows.length===1?'y':'ies')].join(' · ');
+    el('scenarioPurpose').textContent=draft.purpose;el('scenarioSummary').hidden=false;
+    el('scenarioFilename').value=draft.filename;el('scenarioRegeneration').textContent=draft.regeneration_prompt;
+    options(el('scenarioParameter'),[...parameters].sort().map(p=>[p,p]));
+  }
+  function options(select,items){select.replaceChildren();for(const [value,label] of items){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}}
+  function selectParameter(){if(!draft)return;const name=el('scenarioParameter').value,rows=draft.rows.filter(r=>r.parameter===name),flags=draft.dimensions[name];
+    const geography=el('scenarioGeography');el('scenarioSubgroups').replaceChildren();
+    if(flags[0]===1){options(geography,[...new Set(rows.map(r=>r.targets[0]))].sort().map(n=>[n,n]));geography.disabled=false;}
+    else{options(geography,[['',flags[0]===0?'Global (no country dimension)':'Subgroup-specific (no country dimension)']]);geography.disabled=true;}
+    const active=flags.map((flag,axis)=>({flag,axis})).filter(d=>d.flag>0);
+    let candidates=rows;
+    for(const [index,{flag,axis}] of active.entries()){
+      if(axis===0&&flag===1){candidates=candidates.filter(r=>r.targets[index]===geography.value);continue;}
+      const label=document.createElement('label'),select=document.createElement('select');label.textContent=flag===1?'Partner country (dimension '+(axis+1)+')':'Subgroup (dimension '+(axis+1)+')';select.dataset.targetIndex=index;
+      const members=new Map(candidates.map(r=>[r.targets[index],r.target_labels?.[index]||r.targets[index]]));options(select,[...members.entries()].sort((a,b)=>a[1].localeCompare(b[1])));label.append(select);el('scenarioSubgroups').append(label);
+      candidates=candidates.filter(r=>r.targets[index]===select.value);select.onchange=()=>selectSubgroups(index);
+    }
+    selectRow();
+  }
+  function selectSubgroups(changedIndex){const rows=draft.rows.filter(r=>r.parameter===el('scenarioParameter').value),flags=draft.dimensions[el('scenarioParameter').value];let candidates=flags[0]===1?rows.filter(r=>r.targets[0]===el('scenarioGeography').value):rows;
+    for(const select of el('scenarioSubgroups').querySelectorAll('select')){const index=Number(select.dataset.targetIndex);if(index>changedIndex){const old=select.value,members=new Map(candidates.map(r=>[r.targets[index],r.target_labels?.[index]||r.targets[index]]));options(select,[...members]);if(members.has(old))select.value=old;}candidates=candidates.filter(r=>r.targets[index]===select.value);}selectRow();
+  }
+  function selectRow(){const name=el('scenarioParameter').value,flags=draft.dimensions[name];let rows=draft.rows.filter(r=>r.parameter===name);if(flags[0]===1)rows=rows.filter(r=>r.targets[0]===el('scenarioGeography').value);for(const select of el('scenarioSubgroups').querySelectorAll('select'))rows=rows.filter(r=>r.targets[Number(select.dataset.targetIndex)]===select.value);selectedRow=rows[0]||null;
+    el('scenarioAnnualTable').replaceChildren();el('scenarioAnnualDetails').open=false;
+    el('scenarioSelection').textContent=selectedRow?name+' · '+(selectedRow.target_labels?.join(' / ')||'Global')+' · '+selectedRow.start_year+'–'+selectedRow.end_year+(selectedRow.before?' · Changed '+selectedRow.changed_start_year+'–'+selectedRow.changed_end_year:''): 'No matching trajectory.';
+    el('scenarioOriginalKey').hidden=!selectedRow?.before;drawGraph();
+  }
+  el('scenarioParameter').onchange=selectParameter;
+  el('scenarioGeography').onchange=()=>selectSubgroups(-1);
+  el('scenarioInspect').onclick=()=>{if(!draft)return;el('scenarioInspector').showModal();selectParameter();};
+  el('scenarioInspectorClose').onclick=()=>el('scenarioInspector').close();
+  el('scenarioAnnualDetails').ontoggle=()=>{if(!el('scenarioAnnualDetails').open||!selectedRow||el('scenarioAnnualTable').childElementCount)return;const row=selectedRow,table=document.createElement('table'),header=table.createTHead().insertRow();
+    for(const text of ['Year',...(row.before?['Original']:[]),'Proposed']){const th=document.createElement('th');th.scope='col';th.textContent=text;header.append(th);}const body=table.createTBody();row.after.forEach((v,i)=>{const tr=body.insertRow();for(const text of [row.start_year+i,...(row.before?[row.before[i]]:[]),v])tr.insertCell().textContent=text;});el('scenarioAnnualTable').append(table);
+  };
+  function drawGraph(){const host=el('scenarioChart');host.replaceChildren();el('scenarioPoint').textContent='';if(!selectedRow||!el('scenarioInspector').open)return;const row=selectedRow,after=row.after.map(Number),before=row.before?.map(Number),all=after.concat(before||[]);
+    if(all.some(v=>!Number.isFinite(v))){host.textContent='Values exceed the graph numeric range. Inspect the exact annual values below.';return;}
+    const width=Math.max(280,host.clientWidth),height=320,left=76,right=20,top=24,bottom=50,low=Math.min(...all),high=Math.max(...all),padding=(high-low||Math.abs(high)||1)*.1,min=low-padding,max=high+padding;
+    if(!Number.isFinite(max-min)||max===min){host.textContent='The value range cannot be plotted reliably. Inspect the exact annual values below.';return;}
+    const x=i=>left+(width-left-right)*(after.length===1?.5:i/(after.length-1)),y=v=>top+(height-top-bottom)*(1-(v-min)/(max-min)),ns='http://www.w3.org/2000/svg';
+    const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('role','img');svg.setAttribute('aria-label',row.parameter+' annual scenario input values, '+row.start_year+' through '+row.end_year);host.append(svg);
+    function add(tag,attrs,text){const node=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,value);if(text!==undefined)node.textContent=text;svg.append(node);return node;}
+    add('text',{x:left,y:13},'Scenario input value');
+    for(let i=0;i<=4;i++){const value=min+(max-min)*i/4,yy=y(value);add('line',{x1:left,y1:yy,x2:width-right,y2:yy,class:'scenario-grid'});add('text',{x:left-8,y:yy+4,'text-anchor':'end'},Number(value.toPrecision(4)).toString());}
+    const ticks=Math.min(width<460?3:5,after.length),indices=new Set(Array.from({length:ticks},(_,i)=>ticks===1?0:Math.round(i*(after.length-1)/(ticks-1))));for(const i of indices)add('text',{x:x(i),y:height-bottom+22,'text-anchor':'middle'},row.start_year+i);add('text',{x:(width+left-right)/2,y:height-4,'text-anchor':'middle'},'Year');
+    function path(values,style){add('path',{d:values.map((v,i)=>(i?'L':'M')+x(i)+','+y(v)).join(' '),class:style});if(values.length===1)add('circle',{cx:x(0),cy:y(values[0]),r:4,fill:style==='scenario-after'?'#35694f':'#7c879b'});}
+    if(before)path(before,'scenario-before');path(after,'scenario-after');
+    const guide=add('line',{x1:left,y1:top,x2:left,y2:height-bottom,stroke:'#9ba99f','stroke-dasharray':'3 3',visibility:'hidden'});
+    const describe=i=>{guide.setAttribute('x1',x(i));guide.setAttribute('x2',x(i));guide.setAttribute('visibility','visible');el('scenarioPoint').textContent=(row.start_year+i)+' · Proposed: '+row.after[i]+(row.before?' · Original: '+row.before[i]:'');};
+    const overlay=add('rect',{x:left,y:top,width:width-left-right,height:height-top-bottom,fill:'transparent'});overlay.onpointermove=event=>{const rect=svg.getBoundingClientRect(),xx=(event.clientX-rect.left)*width/rect.width;describe(Math.max(0,Math.min(after.length-1,Math.round((xx-left)/(width-left-right)*(after.length-1)))));};overlay.onpointerleave=()=>guide.setAttribute('visibility','hidden');describe(after.length-1);
+  }
+  new ResizeObserver(()=>{if(el('scenarioInspector').open)drawGraph();}).observe(el('scenarioChart'));
+  function showFile(text,name,note){el('scenarioFileTitle').textContent=name;el('scenarioFileNote').textContent=note;el('scenarioFileText').textContent=text;el('scenarioFileDialog').showModal();}
+  el('scenarioFileClose').onclick=()=>el('scenarioFileDialog').close();
+  el('scenarioSourceFile').onclick=()=>{if(source)showFile(source.text,source.name,'Original attached file · unchanged');};
+  el('scenarioViewFile').onclick=async()=>{if(!draft||busy)return;const identity=draft.id;setBusy(true);try{const result=await api('/api/scenario/preview',{session,draft:identity});if(draft?.id===identity)showFile(result.text,result.filename,'Unsaved draft · creation time is finalized when saved');}catch(error){note(error.message,true);}finally{setBusy(false);}};
+  el('scenarioForm').onsubmit=async event=>{event.preventDefault();if(busy)return;const text=el('scenarioPrompt').value.trim();if(!text)return;
+    message(text,'user');el('scenarioPrompt').value='';resetDraft();setBusy(true);note('Checking model metadata and contacting the AI provider…');
+    try{const result=await api('/api/scenario/chat',{message:text,session,source:session?null:source});session=result.session;message(result.reply,'assistant');renderDraft(result.draft);el('scenarioContext').textContent=result.context.version+' · Base year '+result.context.base_year+' · '+result.context.installation;note(result.draft?'Validated proposal ready for review. Saving is a separate step.':'');}
+    catch(error){note(error.message,true);}finally{setBusy(false);el('scenarioPrompt').focus();}
+  };
+  el('scenarioSave').onclick=async()=>{if(busy||!draft)return;const filename=el('scenarioFilename').value.trim();setBusy(true);note('Saving reviewed scenario…');try{const result=await api('/api/scenario/export',{session,draft:draft.id,filename});const parent=el('scenarioExportResult');parent.replaceChildren();const text=document.createElement('p');text.textContent='Saved: '+result.path;const link=document.createElement('a');link.href=result.download;link.download=result.filename;link.textContent='Download .sce';parent.append(text,link);note('Saved with descriptive comments. Existing files were not overwritten.');}catch(error){note(error.message,true);}finally{setBusy(false);}};
+  window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;el('scenarioPrompt').focus();}};
+  reset();
+})();

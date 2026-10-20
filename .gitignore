@@ -20,3 +20,5 @@ desktop/obj/
 *.tmp
 *.bak
 settings.json
+storage.json
+data/

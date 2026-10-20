@@ -13,7 +13,13 @@ def main():
         select_folder(sys.argv[2], sys.argv[3])
         return
     import app
-    app.initialize_storage()
+    import storage
+    try:
+        app.DATA_ROOT = storage.initialize()
+        app.SETTINGS = app.DATA_ROOT / 'settings.json'
+    except (OSError, ValueError) as error:
+        print(json.dumps({'error': 'Cannot prepare Companion storage: ' + str(error)}), flush=True)
+        return
     ready_stream = sys.stdout
     log = (app.DATA_ROOT / 'application.log').open('a', encoding='utf-8', buffering=1)
     sys.stdout = log
@@ -30,7 +36,7 @@ def main():
             result['ok'] = result['http_ok'] and result['comparison']['status'] == 'complete' and all('error' not in s and s['changed'] == 0 for s in result['comparison']['report']['summaries'])
             pathlib.Path(sys.argv[3]).write_text(json.dumps(result, allow_nan=False), encoding='utf-8')
         else:
-            ready_stream.write(json.dumps({'url': f'http://127.0.0.1:{server.server_port}'}) + '\n')
+            ready_stream.write(json.dumps({'url': f'http://127.0.0.1:{server.server_port}', 'data_root': str(app.DATA_ROOT)}) + '\n')
             ready_stream.flush()
             sys.stdin.read()  # EOF on normal desktop shutdown or host failure.
     finally:

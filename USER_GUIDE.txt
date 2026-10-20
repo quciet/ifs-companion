@@ -5,7 +5,7 @@ Start menu or desktop shortcut. The interface opens directly in its own window.
 Close that window to quit. There is no separate browser or companion launcher.
 
 1. Open Settings and browse to your IFs installation folder (containing DATA and RUNFILES).
-2. Open Tools > Compare Runs. Choose the baseline and comparison runs.
+2. Open Tools > Model Vetting. Choose the baseline and comparison runs.
 3. Load shared variables, select outputs, and compare.
 4. Click a result or audit row to inspect trajectories. Save CSVs or SVG charts.
 
@@ -13,8 +13,17 @@ Python, NumPy, and .NET are bundled. Setup automatically installs Microsoft
 WebView2 if missing; that step requires an internet connection. Subsequent
 comparison work runs locally. IFs and model files are not included.
 
-Settings, results, and logs remain in %LOCALAPPDATA%\IFsModelVetting for
-compatibility with earlier versions. Updates and uninstall preserve that data.
+Settings, results, tools, logs, browser data, and temporary files default to the
+"data" folder beside IFsCompanion.exe. Choose another empty folder in Settings >
+Storage, then close and reopen Companion. Saved files are copied and verified;
+after switching locations, the originals are removed automatically. The transfer
+temporarily needs space for both copies, but keeps no permanent backup. If old
+files cannot be removed, Settings reports this and cleanup retries at next launch.
+Changed or unexpected files in the old folder are preserved.
+Browser caches and temporary files are rebuilt. Explicitly chosen output/export
+locations remain unchanged. Earlier LocalAppData data is imported on first launch.
+Updates and uninstall preserve saved data and the adjacent storage.json setting.
+The app folder must be writable. IFS_VETTING_DATA_DIR overrides the saved choice.
 Closing while a tool is doing work asks whether to interrupt it.
 
 For portable use, extract the complete ZIP and open IFsCompanion.exe.
@@ -22,8 +31,20 @@ Keep all extracted files and the engine folder together. WebView2 must already
 be installed; use the installer if it is missing.
 
 Requires Windows 10 version 1809 or later, or Windows 11, x64.
-Model comparison is included. IFs Autotune is available as an optional tool.
-AI, code reader, and scenario builder are not connected yet.
+Model comparison is included. Autotune is available as an optional tool.
+Code Interpreter is available as a separate tool package for Companion 0.1.2 or later.
+1. Open Settings > Manage tools > Add from file and select the Code Interpreter .ifstool.
+2. In Settings > AI connection, enter your Chat Completions-compatible API base URL,
+   model identifier, and API key. Keys are encrypted for your Windows account.
+3. Open Code Interpreter from Tools. Choose bundled source or local source folders,
+   then select Prepare index. Your IFs installation does not need to include code.
+4. Ask a question to use your configured AI provider, or Search code to work offline.
+   Asking sends the question and selected source excerpts to the configured provider.
+5. Click an answer citation to read its code excerpt. Answers retain source revisions
+   or file fingerprints; they do not prove compatibility with your installed IFs.
+Back and Stop preserve selections and saved answers. Updates and uninstall preserve
+this tool's data. Rebuild the index after changing source files or updating the bundle.
+The main Companion chat remains guided. Tools > Scenario Builder uses the shared AI connection to create or modify scenarios. Attach an optional UTF-8 .sce file, review the draft and annual values, then save a new file. Saved files are in the Companion data folder under scenarios. See README.md for details.
 The app provides numerical evidence; reviewers decide whether changes are expected.
 
 INSTALLING OPTIONAL TOOLS
@@ -34,7 +55,7 @@ INSTALLING OPTIONAL TOOLS
 4. Wait for the ready message. Large packages can take a few minutes.
 5. Open the tool from Tools. It appears inside Companion's right panel.
 
-IFs Autotune includes its own Python and Electron runtime. You do not need to
+Autotune includes its own Python and Electron runtime. You do not need to
 install development software. The shared IFs folder is prefilled when the tool
 starts; use the tool's validation step before running experiments.
 
@@ -51,3 +72,8 @@ but no GitHub account. Add from file also works offline.
 
 File installs can use a beta or older version after confirmation. Older versions
 may not support data saved by newer versions. Only use trusted packages.
+
+Tool rows show download and approximate installed size. Choose Release details
+from a tool menu for its version, date, requirements, and release notes.
+Installed and newer official releases are shown separately. Saved work and
+generated indexes are not included in the sizes.
