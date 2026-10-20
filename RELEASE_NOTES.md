@@ -1,21 +1,23 @@
-# IFsCompanion 0.2.1
+# IFsCompanion 0.3.0
 
-Released October 20, 2026.
+Official tools now share one private Python runtime and a locked set of libraries.
+Missing libraries download automatically when installing a tool. Libraries required
+by remaining tools are retained on uninstall, and saved work is preserved. Legacy
+self-contained packages remain supported; update them to the new package versions
+to remove their separate runtimes. First-time file installs may require internet.
 
-Model Vetting is the only tool included by default. Scenario Builder is now a
-separate optional `.ifstool` download, consistent with Code Interpreter and
-Autotune. Install it through Settings > Manage tools; it appears in Tools only
-after installation. The Companion distribution excludes its UI and compiler.
+# IFsCompanion 0.2.2
 
-This corrects the bundling in 0.2.0. Update Companion to 0.2.1, then install
-Scenario Builder 0.1.0 if desired. Existing settings, comparisons, and previously
-generated scenarios remain untouched. Files exported with the earlier bundled
-builder remain in their original data folder; no automatic move is performed.
+Adds Settings > Companion updates to check stable app releases directly from the
+official GitHub repository, download the installer or portable ZIP, and verify
+SHA256 checksums. Optional-tool releases are excluded from app update checks.
 
-Shared AI and storage settings remain in Companion. Optional tools receive the
-current settings paths and keep their mutable files in per-tool storage.
-Scenario Builder uses the selected IFs installation and shared AI connection.
+Installed copies can launch the verified installer and close Companion once
+running work has finished. Portable copies receive a verified ZIP and manual
+replacement instructions. Existing settings, optional tools and saved work stay
+in the data folder. Updates are initiated by the user.
 
-Download the Windows x64 installer or portable ZIP. Verify against SHA256SUMS.
-The installer is unsigned; the portable app requires WebView2. IFs model files
-are not included. See the separate Scenario Builder release for its tool package.
+Model Vetting remains the only included tool. Scenario Builder, Code Interpreter
+and Autotune are installed and updated separately through Manage tools.
+
+Older app versions need a manual update once to gain these controls.

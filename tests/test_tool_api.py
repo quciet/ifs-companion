@@ -66,6 +66,21 @@ class ToolApiTests(unittest.TestCase):
             self.post('/api/scenario/chat',b'{"message":"test"}')
         self.assertEqual(error.exception.code,404);error.exception.close()
 
+    def test_app_update_mutations_are_authenticated_and_install_waits_for_work(self):
+        for path in ('/api/app-update/check','/api/app-update/download','/api/app-update/install'):
+            with self.assertRaises(urllib.error.HTTPError) as error:self.post(path,b'{}',token=False)
+            self.assertEqual(error.exception.code,400);error.exception.close()
+        with urllib.request.urlopen(self.url+'/api/app-update') as response:
+            self.assertEqual(json.load(response)['status'],'idle')
+        from unittest.mock import Mock
+        updater=Mock();updater.check.return_value={'status':'checking'}
+        with patch.object(Handler,'updater',return_value=updater):
+            self.assertEqual(self.post('/api/app-update/check',b'{}')['status'],'checking')
+            with patch.object(self.server.tools,'busy',return_value=True):
+                with self.assertRaises(urllib.error.HTTPError) as error:self.post('/api/app-update/install',b'{}')
+                self.assertEqual(error.exception.code,400);error.exception.close()
+            updater.prepare_install.assert_not_called()
+
     def test_storage_change_is_authenticated_and_stays_in_companion(self):
         import os
         import storage

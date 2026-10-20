@@ -20,15 +20,13 @@ $signature=Get-AuthenticodeSignature -LiteralPath $bootstrapper
 if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw 'WebView2 bootstrapper signature verification failed' }
 & $DotnetPath publish (Join-Path $ModelVettingPath 'decoder') -c Release -r win-x64 --self-contained true -o decoder-runtime --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Decoder publish failed' }
-& $PythonPath -m PyInstaller packaging/IFsCompanion.spec --noconfirm
-if ($LASTEXITCODE -ne 0) { throw 'Python packaging failed' }
 # Build a fresh distribution: the runnable dist folder may now contain user data.
 $packageRoot=Join-Path $PSScriptRoot ('build\package-' + [guid]::NewGuid().ToString('N'))
 $distribution=Join-Path $packageRoot 'IFsCompanion'
 & $DotnetPath publish desktop -c Release -r win-x64 --self-contained true -o $distribution --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Desktop publish failed' }
-New-Item -ItemType Directory -Force (Join-Path $distribution 'engine') | Out-Null
-Copy-Item 'dist\IFsCompanionEngine\*' (Join-Path $distribution 'engine') -Recurse -Force
+& $PythonPath packaging/build_shared_runtime.py --destination $distribution --model $ModelVettingPath
+if ($LASTEXITCODE -ne 0) { throw 'Shared Python packaging failed' }
 foreach ($file in @('USER_GUIDE.txt','LICENSE','THIRD_PARTY_NOTICES.txt','packaging\INSTALLATION_NOTICE.txt')) {
     Copy-Item -LiteralPath $file -Destination $distribution
 }

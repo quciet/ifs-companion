@@ -1,4 +1,4 @@
-#define AppVersion "0.2.1"
+#define AppVersion "0.3.0"
 #ifndef DistributionDir
   #define DistributionDir "..\dist\IFsCompanion"
 #endif
@@ -28,6 +28,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#DistributionDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "data\*,storage.json"
 Source: "..\build-tools\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
 [InstallDelete]
+Type: files; Name: "{app}\engine\IFsCompanionEngine.exe"
+Type: filesandordirs; Name: "{app}\engine\_internal"
 Type: files; Name: "{userdesktop}\IFs Model Vetting.lnk"
 Type: files; Name: "{userprograms}\IFs Model Vetting\IFs Model Vetting.lnk"
 [Icons]

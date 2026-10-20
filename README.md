@@ -9,7 +9,7 @@ IFsCompanion is a Windows desktop workspace for working with International Futur
 - **Return to saved work:** reopen saved comparisons from Recent Work.
 - **Manage tools:** install optional tools and check for tool updates from within the app.
 
-Model Vetting is included and works without an AI connection or API key. Model Vetting is the only included tool. Scenario Builder is an optional `.ifstool` package: install it from Manage tools to create or modify scenarios using the shared AI connection. The main Companion chat remains guided. Code Interpreter can be installed from its separate `.ifstool` package. Configure the shared Chat Completions-compatible provider under Settings > AI connection. Autotune can be installed from a separate tool package; online installation is coming soon.
+Model Vetting is included and works without an AI connection or API key. Model Vetting is the only included tool. Scenario Builder is an optional `.ifstool` package: install it from Manage tools to create or modify scenarios using the shared AI connection. The main Companion chat remains guided. Code Interpreter can be installed from its separate `.ifstool` package. Configure the shared Chat Completions-compatible provider under Settings > AI connection. Autotune can be installed from the official catalog or a separate tool package.
 
 ## Download and install
 
@@ -46,7 +46,7 @@ Comparison work runs locally on your computer. The results provide numerical evi
 Open **Settings > Manage tools** for one searchable list of installed and official tools. This screen manages tools; open installed tools from the left sidebar.
 
 - Choose **Add from file** to install a trusted `.ifstool` package.
-- For an available official tool, open **+** and choose **Install** or **Install from file**.
+- For an available official tool, click **Install** directly in Manage tools. Use **+ → Install from file** for a downloaded `.ifstool` package. Scenario Builder requires Companion 0.2.1 or newer.
 - Installed official tools offer **Update**, **Update from file**, and **Uninstall**. Update is enabled when a newer compatible official release is available.
 - Unofficial tools offer **Update from file** and **Uninstall**.
 
@@ -91,3 +91,28 @@ Tool data and generated files live under the per-tool storage folder, separately
 from program files. Uninstall preserves that data. See
 [Scenario Builder usage](scenario-tool/README.md) for full details and the build
 command. Only Model Vetting works without installing an optional tool.
+
+## Update Companion
+
+Open **Settings > Companion updates > Check for updates**. The app checks stable
+Companion releases from the official GitHub repository, excluding optional-tool
+releases and prereleases. Choose the installer or portable ZIP and click
+**Download update**. Downloads are stored under `updates` in the active data
+folder and checked against the release SHA256 manifest before they are offered.
+
+For an installed copy, **Install update and close Companion** checks the package
+again, waits for running work to finish, and launches the Windows installer in
+the current application folder. Companion closes so its program files can be
+updated. Settings, installed optional tools and saved work remain in the data
+folder. This action does not install or update optional tools.
+
+Portable users can save a copy of the verified ZIP, close Companion, and extract
+it over their existing program files while preserving `data` and `storage.json`.
+Source checkouts can download packages but cannot launch in-place installers.
+No update check or download happens automatically. Offline checks show an error
+rather than reporting that the app is up to date. Versions predating this update
+feature need one manual app update before these controls become available.
+
+### Shared Python (0.3.0+)
+
+Companion and the new official tool packages use one private Python runtime. Optional libraries download automatically on first installation and are stored once across tools. Uninstall removes only libraries no remaining tool requires; saved work stays. A first file installation may also require internet access. Legacy self-contained packages still work and retain their own runtimes until replaced with a new package. See [Shared Python](SHARED_PYTHON.md) for packaging and development commands.

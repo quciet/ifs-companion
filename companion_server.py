@@ -10,11 +10,12 @@ from tool_manager import ToolManager, MAX_UPLOAD
 from official_tools import OfficialTools
 import ai_settings
 import storage
+from app_updates import AppUpdates
 from installation_validation import validate_installation
 from urllib.parse import urlparse, parse_qs
 
 ROOT = Path(__file__).resolve().parent
-if not getattr(sys, 'frozen', False):
+if not getattr(sys, 'frozen', False) and not os.environ.get('IFS_COMPANION_PACKAGED'):
     tool = Path(os.environ.get('IFS_MODEL_VETTING_PATH', ROOT.parent/'ifs-model-vetting')).resolve()
     if not (tool/'app.py').is_file():
         raise RuntimeError('Model-vetting source is missing. Clone ifs-model-vetting beside ifs-companion or set IFS_MODEL_VETTING_PATH.')
@@ -22,6 +23,12 @@ if not getattr(sys, 'frozen', False):
 import app
 
 class Handler(app.Handler):
+    def updater(self):
+        with app.LOCK:
+            if not hasattr(self.server, 'updater'):
+                self.server.updater = AppUpdates(app.DATA_ROOT, storage.app_directory(), frozen=bool(getattr(sys,'frozen',False) or os.environ.get('IFS_COMPANION_PACKAGED')))
+        return self.server.updater
+
     def tools(self):
         if not hasattr(self.server, 'tools'):
             self.server.tools = ToolManager(app.DATA_ROOT / 'companion')
@@ -115,6 +122,14 @@ class Handler(app.Handler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path in ('/api/app-update', '/api/app-update/file'):
+            try:
+                self.tool_access()
+                if path.endswith('/file'):
+                    return self.send(Path(self.updater().verified_file()['path']).read_bytes(), 'application/octet-stream')
+                return self.send(self.updater().progress())
+            except (ValueError, OSError) as error:
+                return self.send({'error':str(error)},status=400)
         if path.startswith('/api/scenario/') or path in ('/scenario.js', '/scenario.css'):
             return self.send({'error': 'Install Scenario Builder from Manage tools.'}, status=404)
         if path == '/api/storage':
@@ -148,7 +163,7 @@ class Handler(app.Handler):
             except (ValueError, OSError) as error:
                 return self.send({'error': str(error)}, status=400)
         if path == '/api/status':
-            return self.send({'running': any(j['status'] == 'running' for j in app.JOBS.values()) or self.tools().busy() or self.official().progress()['status'] in ('checking','downloading','verifying','installing')})
+            return self.send({'running': any(j['status'] == 'running' for j in app.JOBS.values()) or self.tools().busy() or self.official().progress()['status'] in ('checking','downloading','verifying','installing') or (hasattr(self.server,'updater') and self.server.updater.active())})
         if path == '/assets/app-icon.png':
             return self.send((ROOT/'assets/app-icon.png').read_bytes(), 'image/png')
         if path in ('/', '/shell.js', '/shell.css'):
@@ -181,6 +196,21 @@ class Handler(app.Handler):
         return super().do_GET()
 
     def do_POST(self):
+        if self.path in ('/api/app-update/check','/api/app-update/download','/api/app-update/install'):
+            try:
+                self.tool_access(mutate=True)
+                size=int(self.headers.get('Content-Length',0))
+                if not 0 < size < 4096: raise ValueError('Invalid update request.')
+                request=json.loads(self.rfile.read(size))
+                if not isinstance(request,dict): raise ValueError('Invalid update request.')
+                updater=self.updater()
+                if self.path.endswith('/check'): return self.send(updater.check())
+                if self.path.endswith('/download'): return self.send(updater.download(request.get('kind')))
+                if any(j['status']=='running' for j in app.JOBS.values()) or self.tools().busy() or self.official().progress()['status'] in ('checking','downloading','verifying','installing'):
+                    raise ValueError('Wait for running work and tool installations to finish before updating Companion.')
+                return self.send(updater.prepare_install())
+            except (ValueError,OSError) as error:
+                return self.send({'error':str(error)},status=400)
         if self.path.startswith('/api/scenario/'):
             return self.send({'error': 'Install Scenario Builder from Manage tools.'}, status=404)
         if self.path == '/api/storage':

@@ -7,6 +7,7 @@ import traceback
 
 
 def main():
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
     import companion_server
     if len(sys.argv) > 1 and sys.argv[1] == '--pick-folder':
         from folder_picker import select_folder

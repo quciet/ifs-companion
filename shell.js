@@ -79,6 +79,36 @@ function showAISettings(data){
 }
 $('saveAI').onclick=async()=>{const b=$('saveAI');b.disabled=true;try{showAISettings(await api('/api/ai-settings',{endpoint:$('aiEndpoint').value,model:$('aiModel').value,api_key:$('aiKey').value,clear_key:$('clearAIKey').checked}));$('clearAIKey').checked=false;}catch(error){$('aiStatus').textContent=error.message;}finally{b.disabled=false;}};
 api('/api/ai-settings').then(showAISettings).catch(error=>{$('aiStatus').textContent=error.message;});
+let appUpdateTimer=null,appUpdateState=null;
+function showAppUpdate(data){
+  appUpdateState=data;const active=['checking','downloading','verifying'].includes(data.status);
+  $('appUpdateVersion').textContent='Current version: '+data.current_version+' · '+(data.distribution==='installer'?'Installed copy':data.distribution==='portable'?'Portable copy':'Development source');
+  $('appUpdateStatus').textContent=data.message+(data.checked_at?' Last checked: '+new Date(data.checked_at).toLocaleString()+'.':'');
+  $('checkAppUpdate').disabled=active;$('appUpdateKind').disabled=active;
+  $('downloadAppUpdate').hidden=!data.release||!['available','error'].includes(data.status)||data.release.version.split('.').map(Number).some(Number.isNaN);
+  $('downloadAppUpdate').disabled=active;
+  $('installAppUpdate').hidden=!data.can_install||!window.chrome?.webview;
+  $('appUpdateProgress').hidden=!['downloading','verifying'].includes(data.status);$('appUpdateProgress').max=data.total||1;$('appUpdateProgress').value=data.received||0;
+  $('appUpdateNotes').hidden=!data.release;$('appUpdateNotesText').textContent=data.release?.notes||'';
+  $('appUpdateResult').replaceChildren();
+  if(data.status==='ready'){
+    const label=document.createElement('span');label.textContent='Verified download: '+data.path+' ';$('appUpdateResult').append(label);
+    const link=document.createElement('a');link.href='/api/app-update/file';link.download=data.path.split(/[\\/]/).at(-1);link.textContent='Save a copy';$('appUpdateResult').append(link);
+    if(data.kind==='portable')$('appUpdateResult').append(document.createTextNode(' · Close Companion before extracting the ZIP. Preserve data and storage.json.'));
+  }
+  if(data.release){const link=document.createElement('a');link.href=data.release.url;link.textContent='View official release';link.target='_blank';link.rel='noopener';link.onclick=event=>{if(window.chrome?.webview){event.preventDefault();window.chrome.webview.postMessage({type:'open-companion-release',url:data.release.url});}};$('appUpdateResult').append(document.createTextNode(' '),link);}
+  if(active&&!appUpdateTimer)appUpdateTimer=setTimeout(pollAppUpdate,1000);
+}
+async function pollAppUpdate(){appUpdateTimer=null;try{showAppUpdate(await api('/api/app-update'));}catch(error){$('appUpdateStatus').textContent=error.message;}}
+$('checkAppUpdate').onclick=async()=>{try{showAppUpdate(await api('/api/app-update/check',{}));}catch(error){$('appUpdateStatus').textContent=error.message;}};
+$('downloadAppUpdate').onclick=async()=>{try{showAppUpdate(await api('/api/app-update/download',{kind:$('appUpdateKind').value}));}catch(error){$('appUpdateStatus').textContent=error.message;}};
+$('installAppUpdate').onclick=async()=>{
+  if(!await confirmTool('Install Companion update?', 'Companion will close and launch the verified installer. Finish running work first. Your saved data and optional tools will be kept.', 'Install and close'))return;
+  $('installAppUpdate').disabled=true;$('appUpdateStatus').textContent='Preparing the verified installer…';
+  window.chrome.webview.postMessage({type:'install-companion-update'});
+};
+if(window.chrome?.webview)window.chrome.webview.addEventListener('message',event=>{if(event.data?.type==='companion-update-result'){$('installAppUpdate').disabled=false;$('appUpdateStatus').textContent=event.data.error;}});
+api('/api/app-update').then(data=>{$('appUpdateKind').value=data.distribution==='installer'?'installer':'portable';showAppUpdate(data);}).catch(error=>{$('appUpdateStatus').textContent=error.message;});
 $('browse').onclick=async()=>{const button=$('browse');if(button.disabled)return;button.disabled=true;try{const data=await selectInstallationFolder();if(data.installation){$('installation').value=data.installation;await $('saveInstallation').onclick();}}catch(error){$('settingsStatus').textContent=error.message;}finally{button.disabled=false;}};
 async function openRecent(id){try{const running=jobs.find(j=>j.status==='running');if(running&&running.id!==id){status(Error('A comparison is running. Wait for it to finish before opening a different report.'));return;}const win=frame.contentWindow;if(!win.openCompanionReport)throw Error('Model Vetting is still loading. Please try again.');await win.openCompanionReport(id);navigate('compare');status(null);}catch(error){status(error);}}
 async function refreshRecent(){try{const data=await api('/api/recent');jobs=data.jobs;$('recent').replaceChildren();$('running').textContent=jobs.some(j=>j.status==='running')?'1 running':'';if(!jobs.length)$('recent').textContent='No comparisons yet.';for(const item of jobs){const button=document.createElement('button');button.textContent=item.title;const note=document.createElement('small');note.textContent=item.status+(item.created?' · '+new Date(item.created*1000).toLocaleDateString():'');button.append(note);button.onclick=()=>openRecent(item.id);$('recent').append(button);}}catch(error){status(error);}}
@@ -179,7 +209,7 @@ function showReleaseDetails(tool){
   }
   section(tool.installed?'Installed version':tool.included?'Separate tool release':'Available release',releaseData(tool));
   if(tool.installed&&tool.official?.status==='available'&&tool.official.version!==tool.installed.version)section('Latest official release',tool.official);
-  paragraph('Sizes exclude saved work, generated indexes, and temporary installation space.');$('releaseDialog').showModal();
+  paragraph('Sizes cover the tool package only. Shared Python libraries download separately when needed and are reused across tools. Saved work, generated indexes, and temporary installation space are excluded.');$('releaseDialog').showModal();
 }
 function renderOfficialTools(){
   const directory=$('toolDirectory');directory.replaceChildren();
@@ -216,6 +246,14 @@ function renderOfficialTools(){
     size.textContent=installed?'Downloaded · Installed':tool.included?'Included with Companion':[release?.size?'Requires '+formatBytes(release.size)+' download':'',release?.installed_size?'~'+formatBytes(release.installed_size)+' disk space':''].filter(Boolean).join(' · ');
     if(size.textContent)info.append(size);row.append(icon,info);
     const controls=document.createElement('div');controls.className='tool-controls';
+    if(!ready&&published){
+      action(controls,'Install',()=>installOfficial(official));
+      controls.lastElementChild.disabled=toolBusy||!official.compatible;
+      controls.lastElementChild.title=official.compatible?'Download and install '+tool.name:'Requires Companion '+official.min_companion_version;
+    }else if(newer){
+      action(controls,'Update',()=>installOfficial(official));
+      controls.lastElementChild.disabled=toolBusy;
+    }
     const menu=document.createElement('details');menu.className='tool-menu';
     const trigger=document.createElement('summary');trigger.textContent=ready?'\u2026':'+';trigger.setAttribute('aria-label',(ready?'Manage ':'Add ')+tool.name);
     const items=document.createElement('div');items.className='tool-menu-items';

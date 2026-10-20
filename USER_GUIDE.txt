@@ -77,3 +77,13 @@ Tool rows show download and approximate installed size. Choose Release details
 from a tool menu for its version, date, requirements, and release notes.
 Installed and newer official releases are shown separately. Saved work and
 generated indexes are not included in the sizes.
+
+COMPANION UPDATES
+Open Settings > Companion updates. Check the official releases, then download
+the installer or portable ZIP. Downloads are SHA256 verified. Installed copies
+can launch the verified installer and close Companion after running work ends.
+Portable copies should be closed before extracting the ZIP over program files;
+preserve data and storage.json. Optional tools update through Manage tools.
+
+SHARED PYTHON (0.3.0+)
+Companion includes Python and its core libraries. New official tool packages reuse it. Missing optional libraries download automatically, including when installing a tool from a file. Internet is needed for missing libraries; installed tools work offline. Libraries used by multiple tools are stored once. Uninstall keeps libraries needed by remaining tools and always keeps your saved work. Older self-contained packages retain their bundled runtimes until updated.

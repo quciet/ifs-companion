@@ -14,6 +14,7 @@ import threading
 import time
 import urllib.request
 import zipfile
+from shared_python import SharedPython, validate_profile
 
 MAX_UPLOAD = 4 * 1024**3
 MAX_EXPANDED = 12 * 1024**3
@@ -60,10 +61,13 @@ def manifest(data):
     if not isinstance(data.get('version'), str) or not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?', data['version']):
         raise ValueError('Tool version must use major.minor.patch with an optional prerelease suffix.')
     entry = safe_relative(data.get('entrypoint'))
-    if entry.suffix.lower() != '.exe': raise ValueError('A self-contained Windows executable is required.')
+    profile = validate_profile(data)
+    if entry.suffix.lower() not in (('.exe', '.py') if profile else ('.exe',)):
+        raise ValueError('A supported tool entrypoint is required.')
     # Do not accept arbitrary commands, shell strings, or environment overrides.
     result = {key: data[key] for key in ('id', 'name', 'version', 'api_version', 'platform', 'kind', 'entrypoint')}
     result['name'] = {'ifs-model-vetting': 'Model Vetting', 'ifs-autotune': 'Autotune', 'ifs-code-reader': 'Code Interpreter', 'ifs-scenario-builder': 'Scenario Builder'}.get(identity, result['name'])
+    if profile: result['python_profile'] = profile
     result.update(release_metadata(data))
     return result
 
@@ -81,6 +85,7 @@ class ToolManager:
         self.data.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.processes = {}
+        self.python = SharedPython(self.root)
         self.before_change = lambda identity: None
 
     def _folder(self, identity):
@@ -130,7 +135,7 @@ class ToolManager:
             if release_info: meta.update(release_metadata(release_info))
             meta['installed_size'] = sum(i.file_size for i in infos)
             package.fp.seek(0, 2); meta['size'] = package.fp.tell()
-            if meta.get('min_companion_version') and version_key(meta['min_companion_version']) > version_key('0.2.1'):
+            if meta.get('min_companion_version') and version_key(meta['min_companion_version']) > version_key('0.3.0'):
                 raise ValueError('This tool requires Companion ' + meta['min_companion_version'] + ' or later.')
             identity = meta['id']
             self.before_change(identity)
@@ -153,13 +158,26 @@ class ToolManager:
                     with package.open(info) as source, target.open('wb') as output:
                         shutil.copyfileobj(source, output, 1024 * 1024)
                 (stage / 'tool.json').write_text(json.dumps(meta, indent=2), encoding='utf-8')
+                try: self.python.ensure(meta)
+                except Exception:
+                    self._clean_python()
+                    raise
                 backup = Path(temp) / 'previous'
                 if folder.exists(): folder.rename(backup)
                 try: stage.rename(folder)
                 except Exception:
                     if backup.exists(): backup.rename(folder)
                     raise
+            self._clean_python()
             return meta
+
+    def _clean_python(self):
+        # Fail closed: an unreadable manifest must never make its libraries look unused.
+        try:
+            installed = [self.read(p.name) for p in self.programs.iterdir()
+                         if p.is_dir() and not p.name.startswith('.')]
+        except (ValueError, OSError): return
+        self.python.cleanup(installed)
 
     def _require_stopped(self, identity):
         state = self.processes.get(identity)
@@ -182,6 +200,7 @@ class ToolManager:
             if close_idle: self.stop(identity)
             self._require_stopped(identity)
             shutil.rmtree(folder)
+            self._clean_python()
             return {'removed': identity, 'data_preserved': True}
 
     def start(self, identity, installation=''):
@@ -199,8 +218,13 @@ class ToolManager:
                 env['IFS_VETTING_DATA_DIR'] = str(self.root.parent)
             env['IFS_AI_SETTINGS_FILE'] = str(self.root / 'ai-settings.json')
             env['IFS_SETTINGS_FILE'] = str(self.root.parent / 'settings.json')
+            command = [str(self._folder(identity) / meta['entrypoint'])]
+            if meta.get('python_profile'):
+                env = self.python.environment(meta, env)
+                if meta['entrypoint'].endswith('.py'):
+                    command = [str(self.python.runtime), '-s', '-B', *command]
             with (data / 'tool.log').open('ab') as log:
-                process = subprocess.Popen([str(self._folder(identity) / meta['entrypoint'])],
+                process = subprocess.Popen(command,
                     cwd=self._folder(identity), env=env, stdin=subprocess.PIPE, stdout=log, stderr=log,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
             try:

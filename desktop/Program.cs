@@ -43,10 +43,14 @@ sealed class CompanionWindow : Form
         try
         {
             // A redirected input pipe also makes the engine exit if this host crashes.
-            backend = new Process { StartInfo = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "engine", "IFsCompanionEngine.exe")) {
+            backend = new Process { StartInfo = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "python", "python.exe")) {
                 UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
                 RedirectStandardOutput = true, WorkingDirectory = AppContext.BaseDirectory
             }};
+            backend.StartInfo.ArgumentList.Add("-I");
+            backend.StartInfo.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "engine", "desktop_launcher.py"));
+            backend.StartInfo.Environment["IFS_COMPANION_PYTHON"] = Path.Combine(AppContext.BaseDirectory, "python", "python.exe");
+            backend.StartInfo.Environment["IFS_COMPANION_PACKAGED"] = "1";
             backend.StartInfo.Environment["IFS_COMPANION_APP_DIR"] = AppContext.BaseDirectory;
             backend.Start();
             // First launch or a storage change may copy large tool packages/results.
@@ -124,7 +128,18 @@ sealed class CompanionWindow : Form
     {
         if (closing || pickingFolder || e.Source != origin + "/") return;
         using var message = JsonDocument.Parse(e.WebMessageAsJson);
-        if (!message.RootElement.TryGetProperty("type", out var type) || (type.GetString() != "select-installation" && type.GetString() != "select-storage")) return;
+        if (!message.RootElement.TryGetProperty("type", out var type)) return;
+        if (type.GetString() == "install-companion-update") {
+            BeginInvoke((Action)(async () => await InstallUpdateAsync()));
+            return;
+        }
+        if (type.GetString() == "open-companion-release") {
+            var url = message.RootElement.GetProperty("url").GetString() ?? "";
+            if (System.Text.RegularExpressions.Regex.IsMatch(url, @"^https://github\.com/quciet/ifs-companion/releases/tag/v\d+\.\d+\.\d+$"))
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            return;
+        }
+        if (type.GetString() != "select-installation" && type.GetString() != "select-storage") return;
         bool storageFolder = type.GetString() == "select-storage";
         var initial = message.RootElement.GetProperty("installation").GetString() ?? "";
         pickingFolder = true;
@@ -143,6 +158,30 @@ sealed class CompanionWindow : Form
                     view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = storageFolder ? "storage-selected" : "installation-selected", error = ex.Message }));
             } finally { pickingFolder = false; }
         }));
+    }
+
+    async Task InstallUpdateAsync()
+    {
+        if (closing || origin == null) return;
+        try {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var tokenJson = await view.CoreWebView2.ExecuteScriptAsync("document.querySelector('meta[name=companion-token]').content");
+            client.DefaultRequestHeaders.Add("X-Companion-Token", JsonSerializer.Deserialize<string>(tokenJson));
+            using var response = await client.PostAsync(origin + "/api/app-update/install", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            if (!response.IsSuccessStatusCode) throw new Exception(document.RootElement.GetProperty("error").GetString());
+            var path = Path.GetFullPath(document.RootElement.GetProperty("path").GetString()!);
+            var directory = Path.GetFullPath(Path.Combine(dataRoot, "updates")) + Path.DirectorySeparatorChar;
+            if (!path.StartsWith(directory, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(path).StartsWith("IFsCompanion-Setup-", StringComparison.Ordinal) || !path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) throw new Exception("Invalid update package location.");
+            var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+            if (digest != document.RootElement.GetProperty("sha256").GetString()) throw new Exception("Update checksum changed. Download it again.");
+            if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "unins000.exe"))) throw new Exception("This copy uses portable updates. Download and extract the ZIP after closing Companion.");
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, Arguments = "/CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /DIR=\"" + AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar) + "\"" });
+            closing = true;
+            Close();
+        } catch (Exception error) {
+            if (!closing) view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "companion-update-result", error = error.Message }));
+        }
     }
 
     async void ClosingAsync(object? sender, FormClosingEventArgs e)

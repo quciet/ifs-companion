@@ -1,7 +1,7 @@
 # IFs tool packages, format 1
 
-A `.ifstool` file is a ZIP with `tool.json` at the root and all required Windows
-x64 program files. Packages run trusted native code. This is an internal package
+A `.ifstool` file is a ZIP with `tool.json` at the root and its Windows
+x64 program files. Official shared-Python packages download missing libraries separately. Packages run trusted native code. This is an internal package
 format, not a sandbox or a way to install arbitrary ZIP files. Only install tools
 from your team. Optional tools can be installed, updated from a newer package,
 and uninstalled independently of Companion. Same-version repair is allowed;
@@ -17,7 +17,7 @@ Example manifest:
  "entrypoint":"electron/IFsAutotune.exe"}
 ```
 
-The ID is stable across updates. The entry point is a relative `.exe` path.
+The ID is stable across updates. The legacy entry point is a relative `.exe` path. Official shared-Python packages add `"python_profile":"official-python-v1"`, require Companion 0.3.0+, and may use a `.py` entry point. See [Shared Python](SHARED_PYTHON.md).
 Do not include personal settings, working inputs, results, credentials, or source
 checkouts. Reviewed, versioned source snapshots for Code Interpreter are permitted; omit Git history, credentials, and build outputs. Include dependency licenses and any clean starter templates needed.
 ZIP paths may not escape their installation folder or contain links.
