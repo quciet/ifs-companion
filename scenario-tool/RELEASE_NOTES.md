@@ -1,18 +1,15 @@
-# Scenario Builder 0.3.1
+# Scenario Builder 0.3.2
 
-Fixes metadata-limit failures on scenarios with many parameters. Valid local
-lookup batches no longer have an arbitrary operation count cap. Identical
-lookups reuse cached results instead of rereading the metadata.
+Fixes the raw JSON parsing error ("Expecting value: line 1 column 1") when an AI
+provider returns an empty answer or ordinary prose instead of the required JSON.
+The builder now retries once with a format-only correction. It explicitly asks
+for clarification when assumptions are missing and prohibits invented values,
+parameters or country memberships.
 
-Repeated lookup cycles, the AI round-trip checkpoint, and provider interruptions
-now pause research with **Continue researching** and **Revise request** actions.
-The original request, attachment, and metadata results are preserved in the
-current chat. A visible **Stop** action pauses after the current AI call returns;
-Companion's Stop action also preserves progress.
+If the provider still returns invalid response formatting, research pauses with
+**Continue researching** and **Revise request**. The original request, attachment
+and completed metadata lookups are preserved in the current chat. Proposal
+validation and explicit confirmation remain mandatory.
 
-Provider context is bounded without discarding the full local research history.
-Country and parameter validation, stale-installation checks, and explicit
-confirmation before creating a working draft remain in place.
-
-Requires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools**, or install
+Requires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools** or install
 the downloaded `.ifstool` package from file. Existing saved scenarios are kept.

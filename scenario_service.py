@@ -276,6 +276,7 @@ class ScenarioService:
                             *session['history'], {'role': 'user', 'content': text}]
             session['research'] = None
             repeated_rounds = 0
+            format_retries = 0
             for _ in range(MAX_METADATA_ROUNDS):
                 if session.get('cancelled'):
                     return self.pause(identity, session, messages, context, 'stopped')
@@ -293,6 +294,20 @@ class ScenarioService:
                 messages.append(answer)
                 calls = answer.get('tool_calls') or []
                 if not calls:
+                    try:
+                        content, reply = self.parse_response(answer.get('content'))
+                    except (ValueError, TypeError):
+                        if format_retries:
+                            return self.pause(identity, session, messages, context, 'format')
+                        format_retries += 1
+                        messages[-1] = {**answer, 'content': answer.get('content') or ''}
+                        messages.append({'role': 'user', 'content':
+                            'Response format correction only: return a valid JSON object with a nonempty "reply" '
+                            'and "proposal". Use proposal:null to ask clarifying questions when magnitudes, '
+                            'years, or other assumptions are missing. Preserve my original intent and the '
+                            'verified metadata. Do not invent values, parameters or country memberships. '
+                            'Return JSON only, without introductory prose or markdown.'})
+                        continue
                     break
                 new_lookups = 0
                 for call in calls:
@@ -329,13 +344,6 @@ class ScenarioService:
             else:
                 return self.pause(identity, session, messages, context, 'rounds')
             try:
-                content = answer.get('content') or ''
-                content = re.sub(r'^```(?:json)?\s*|\s*```$', '', content.strip())
-                reply = json.loads(content)
-                if not isinstance(reply, dict):
-                    raise ValidationError('AI response must be an object.')
-                if not isinstance(reply.get('reply'), str) or not reply['reply'].strip():
-                    raise ValueError()
                 proposal = reply.get('proposal')
                 draft = self.prepare(compiler, source, proposal, context) if proposal is not None else None
             except (KeyError, TypeError, ValueError, ArithmeticError) as exc:
@@ -351,6 +359,17 @@ class ScenarioService:
         finally:
             with self.lock:
                 session['busy'] = False
+
+    @staticmethod
+    def parse_response(content):
+        if not isinstance(content, str):
+            raise ValueError('Missing AI response text.')
+        content = re.sub(r'^```(?:json)?\s*|\s*```$', '', content.lstrip('\ufeff').strip(), flags=re.IGNORECASE)
+        reply = json.loads(content)
+        if (not isinstance(reply, dict) or not isinstance(reply.get('reply'), str)
+                or not reply['reply'].strip() or 'proposal' not in reply):
+            raise ValueError('The AI response requires reply and proposal fields.')
+        return content, reply
 
     @staticmethod
     def compact_metadata(messages):
@@ -373,6 +392,7 @@ class ScenarioService:
             'rounds': 'Research reached the AI round-trip checkpoint.',
             'stopped': 'Research stopped.',
             'context': 'The conversation needs a shorter or more focused request.',
+            'format': 'The AI returned an empty or incorrectly formatted response even after a format retry.',
             'provider': 'The AI connection interrupted research. ' + detail}
         with self.lock:
             research = {'id': secrets.token_urlsafe(24), 'messages': list(messages), 'reason': reason}

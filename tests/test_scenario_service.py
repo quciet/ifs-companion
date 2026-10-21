@@ -136,6 +136,40 @@ class ScenarioServiceTests(unittest.TestCase):
         self.assertEqual(len(results), 10)
         self.assertTrue(all('error' not in json.loads(m['content']) for m in results))
 
+    def test_plain_text_response_is_retried_without_inventing_a_draft(self):
+        self.replies.append({'role': 'assistant', 'content': 'What years and adjustment magnitudes do you want?'})
+        self.answer({'reply': 'What years and magnitudes should these changes use?', 'proposal': None})
+        result = self.service.chat({'message': 'Make a divided world scenario.'})
+        self.assertIsNone(result['draft'])
+        self.assertIn('magnitudes', result['reply'])
+        self.assertEqual(len(self.seen), 2)
+        self.assertIn('Do not invent', self.seen[-1][1][-1]['content'])
+        self.assertFalse((self.root/'scenarios').exists())
+
+    def test_empty_response_retries_then_can_prepare_valid_proposal(self):
+        self.replies.append({'role': 'assistant', 'content': None})
+        self.answer(proposal())
+        result = self.service.chat({'message': 'Double Iraq yield by 2100.'})
+        self.assertIsNotNone(result['confirmation'])
+        self.assertIsNone(result['draft'])
+
+    def test_invalid_format_pauses_with_research_and_can_resume(self):
+        self.metadata([('parameter_details', {'parameter': 'ylm'})])
+        self.replies.extend([{'role': 'assistant', 'content': 'Not JSON'}, {'role': 'assistant', 'content': ''}])
+        result = self.service.chat({'message': 'Double Iraq yield by 2100.'})
+        self.assertEqual(result['research']['reason'], 'format')
+        self.assertEqual(result['research']['lookups'], 1)
+        self.answer(proposal())
+        resumed = self.service.chat({'session': result['session'], 'continue_research': result['research']['id']})
+        self.assertIsNotNone(resumed['confirmation'])
+        self.assertTrue(any(m['role'] == 'tool' for m in self.seen[-1][1]))
+
+    def test_response_wrapper_and_envelope(self):
+        content, result = self.service.parse_response('\ufeff```JSON\n{"reply":"Which years?","proposal":null}\n```')
+        self.assertEqual(result['reply'], 'Which years?')
+        for value in ('[]', '{}', '{"reply":""}', '{"reply":"Missing proposal"}'):
+            with self.assertRaises(ValueError): self.service.parse_response(value)
+
     def metadata(self, calls):
         self.replies.append({'role': 'assistant', 'content': None, 'tool_calls': [
             {'id': str(i), 'type': 'function', 'function': {'name': name,
