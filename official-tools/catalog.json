@@ -49,17 +49,17 @@
     {
       "id": "ifs-scenario-builder",
       "name": "Scenario Builder",
-      "version": "0.3.3",
+      "version": "0.4.0",
       "min_companion_version": "0.3.0",
       "api_version": 1,
       "platform": "win-x64",
-      "sha256": "df1adf563d8e786a704ffbedf3c7cfb80d3ce31378ec0f0ddb4b0adc8963fc3b",
-      "size": 34598,
-      "installed_size": 107964,
+      "sha256": "6b39537630d323760ae87cc9d71e92d2df7c46fe672c77e5e1127f1e636ce608",
+      "size": 45532,
+      "installed_size": 144932,
       "released_at": "2026-10-21",
-      "release_notes": "# Scenario Builder 0.3.3\n\nFixes duplicate scenario targets caused by overlapping country selections.\nIdentical annual trajectories for the same parameter and complete dimension\ntarget merge into a single row. The confirmation reports how many identical\ndefinitions were merged.\n\nConflicting trajectories now ask the user which definition should apply instead\nof ending the conversation with a raw duplicate-target error. The original\nrequest and proposed definitions stay in the chat for clarification.\n\nIdentical edits to attached scenarios apply once. Other overlapping adjustments\nrequire clarification so multipliers are not accidentally applied twice.\nUnrelated dimension targets and disjoint time intervals remain independent.\n\nRequires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools** or install\nthe downloaded `.ifstool` package. Existing saved scenarios are kept.\n",
-      "description": "Build and modify .sce scenarios in chat with IFs preset country groups, explicit confirmation, attachments and graph inspection. Optional tool.",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.3.3/ifs-scenario-builder-0.3.3-win-x64.ifstool"
+      "release_notes": "# Scenario Builder 0.4.0\n\n- Adds installed IFs parameter explanations, units, bounds, affected-variable\n  definitions and audited semantic direction checks. Reversed corruption\n  interventions are blocked for clarification. Unknown outcome polarity is\n  explicitly marked for review rather than inferred.\n- Adds IFs high/low/base suggestions calculated from actual country/dimension\n  baseline values in IFsBase.run.db. Uses supplied shifts, durations and bounds;\n  missing baseline values or presets are not invented. Base preserves the saved\n  trajectory. The selected installation and its baseline are read-only.\n- Writes native IFs country-group targets where baseline and aggregation checks\n  establish equivalence. Preserves explicit country rows for differentiated\n  inputs, unequal baselines, SUM allocation or common-target semantics. Shows the\n  reason and expands supported native group records when reopening a file.\n- Distinguishes cumulative nuclear stock additions from annual additions and\n  converts cumulative trajectories to yearly increments. Reads existing nuclear\n  states from the saved GOVNUCWP baseline. Discloses military-personnel proxies\n  and the route limitations of country-level migration controls.\n- Shows semantic interpretations, preset calculations and group-writing decisions\n  in the confirmation. A changed baseline or metadata invalidates pending review.\n\nRequires **IFsCompanion 0.3.0 or newer**, including its bundled baseline decoder.\nNo separate runtime is shipped with the tool. Update through **Manage tools** or\ninstall the `.ifstool` package from file. Existing saved scenarios are preserved.\n\nValidation uses installed IFs 8.74 metadata and baseline with the World at War\nnarrative. These are input/compiler checks, not a solved forecast or a guarantee\nthat every narrative interpretation is correct.\n",
+      "description": "Build and modify .sce scenarios in chat with semantic direction checks, baseline-derived IFs presets, native country groups, confirmation and graph inspection. Optional tool.",
+      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.4.0/ifs-scenario-builder-0.4.0-win-x64.ifstool"
     }
   ]
 }
