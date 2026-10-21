@@ -62,6 +62,7 @@
       const value=pending,card=message('','assistant','Scenario Builder · Confirmation');
       const summary=document.createElement('p');summary.textContent='Confirm scenario: '+value.purpose+'\nParameters: '+value.parameters.join(', ')+' · '+value.trajectories+' trajectories';card.append(summary);
       const intent=document.createElement('p');intent.textContent=value.regeneration_prompt;card.append(intent);
+      if(value.merged_duplicates){const merged=document.createElement('p');merged.textContent=value.merged_duplicates+' identical overlapping definitions merged; each parameter/target is applied once.';card.append(merged);}
       for(const group of value.geographies){const details=document.createElement('details'),label=document.createElement('summary'),members=document.createElement('p');label.textContent=group.kind+' · '+group.name+' · '+group.countries.length+' countries';members.textContent=group.countries.join(', ');details.append(label,members);card.append(details);}
       const approve=document.createElement('button');approve.type='button';approve.className='scenario-confirm-button';approve.textContent='Confirm and build draft';
       approve.onclick=async()=>{if(busy||pending?.id!==value.id)return;setBusy(true);approve.disabled=true;note('Building confirmed draft…');try{const result=await api('/api/scenario/chat',{session,confirmation:value.id});receive(result);}catch(error){note(error.message,true);approve.disabled=false;}finally{setBusy(false);}};

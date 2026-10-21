@@ -13,11 +13,15 @@ from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 
 import ai_settings
-from scenario_compiler import Compiler, References, ValidationError
+from scenario_compiler import Compiler, References, ValidationError, ScenarioRows, integer, number
 from installation_validation import validate_installation
 
 MAX_METADATA_ROUNDS = 16
 MAX_REPEATED_ROUNDS = 3
+
+
+class ScenarioConflict(ValidationError):
+    """Different proposed definitions overlap; the user must resolve intent."""
 
 SYSTEM = '''You are the IFs Scenario Builder. Discuss, inspect and propose scenarios in one chat.
 Metadata is cached locally. Reuse supplied results rather than repeating identical lookups.
@@ -39,6 +43,10 @@ targets,start_year,end_year and operation (multiply/add/zero), plus value except
 You may use operation set_linear with start_value and end_value to replace a specific interval
 with a linear trajectory. Read original source values with source_rows before proposing changes.
 Do not silently create new rows in an attached file. Unrequested rows and source comments are preserved.
+Country groups may overlap. Use only one trajectory per parameter and complete dimension target.
+For attached files, do not apply the same adjustment twice to overlapping country groups.
+If a global/group rule and a country-specific exception differ, ask which rule takes precedence
+unless the user has explicitly specified it; never silently sum, multiply or overwrite them.
 Every proposal is a complete replacement of the previous proposal. For attached scenarios, list
 all cumulative approved changes relative to the ORIGINAL attachment, not a previously proposed draft.
 The purpose and regeneration_prompt must be descriptive prose, not arrays, formulas or JSON.
@@ -346,6 +354,16 @@ class ScenarioService:
             try:
                 proposal = reply.get('proposal')
                 draft = self.prepare(compiler, source, proposal, context) if proposal is not None else None
+            except ScenarioConflict as exc:
+                clarification = (str(exc) + ' No draft was created. Which definition should apply to this target? '
+                    'Please specify the intended trajectory or which group/country rule takes precedence.')
+                with self.lock:
+                    session['history'] = messages[1:] + [{'role': 'assistant', 'content': json.dumps(
+                        {'reply': clarification, 'proposal': None})}]
+                    session['research'] = None
+                    session['pending'] = None
+                return {'session': identity, 'reply': clarification, 'draft': None,
+                        'confirmation': None, 'context': context}
             except (KeyError, TypeError, ValueError, ArithmeticError) as exc:
                 raise ValidationError('The AI proposal could not be validated. No draft was accepted. ' + str(exc)) from None
             with self.lock:
@@ -448,6 +466,7 @@ class ScenarioService:
         review = draft['review']
         return {'id': review['id'], 'purpose': review['purpose'],
                 'regeneration_prompt': review['regeneration_prompt'], 'geographies': review['geographies'],
+                'merged_duplicates': review.get('merged_duplicates', 0),
                 'parameters': sorted(review['dimensions']), 'trajectories': len(review['rows'])}
 
     def confirm(self, request):
@@ -479,14 +498,47 @@ class ScenarioService:
             entries = expand_entries(proposal['entries'], compiler.base_year)
             if any(len(e['values']) > 2500 - compiler.base_year + 1 for e in entries):
                 raise ValidationError('Scenario trajectory exceeds year 2500.')
-            rows = compiler.build(entries)
+            rows = ScenarioRows()
+            seen = {}
+            merged_duplicates = 0
+            for entry in entries:
+                row = compiler.build([entry])[0]
+                count = sum(f > 0 for f in compiler.references.dimensions(entry['parameter']))
+                key = tuple(row[1:2 + count])
+                values = tuple(number(v) for v in row[2 + count:])
+                if key in seen:
+                    if values != seen[key]:
+                        raise ScenarioConflict('Conflicting trajectories for ' + ' / '.join(key) + '.')
+                    merged_duplicates += 1
+                    continue
+                seen[key] = values
+                rows.append(row)
         else:
             if 'entries' in proposal or not proposal.get('changes'):
                 raise ValidationError('An attached scenario requires explicit changes.')
             if not isinstance(proposal['changes'], list) or len(proposal['changes']) > 10000:
                 raise ValidationError('Provide at most 10,000 changes.')
             rows = source
+            changes, seen = [], {}
+            merged_duplicates = 0
             for change in proposal['changes']:
+                key = (change['parameter'], *compiler.references.targets(change['parameter'], change.get('targets', [])))
+                start, end = integer(change['start_year']), integer(change['end_year'])
+                if start > end:
+                    raise ValidationError('Reversed adjustment interval.')
+                operation = change['operation']
+                values = (number(change['start_value']), number(change['end_value'])) if operation == 'set_linear' else (
+                    () if operation == 'zero' else (number(change['value']),))
+                signature = (start, end, operation, values)
+                previous = seen.setdefault(key, [])
+                if signature in previous:
+                    merged_duplicates += 1
+                    continue
+                if any(start <= prior[1] and end >= prior[0] for prior in previous):
+                    raise ScenarioConflict('Overlapping adjustments for ' + ' / '.join(key) + '.')
+                previous.append(signature)
+                changes.append(change)
+            for change in changes:
                 if change['operation'] == 'set_linear':
                     start, end = change['start_year'], change['end_year']
                     # Reuse compiler validation for exact row and existing year coverage.
@@ -538,6 +590,7 @@ class ScenarioService:
         if individual:
             geographies.append({'kind': 'Explicit IFs countries', 'name': 'Individual targets', 'countries': individual})
         review = {'id': secrets.token_urlsafe(24), 'purpose': purpose, 'regeneration_prompt': prompt,
+                  'merged_duplicates': merged_duplicates,
                   'geographies': geographies,
                   'filename': proposal.get('filename', 'Scenario.sce'), 'rows': review_rows,
                   'dimensions': {r['parameter']: compiler.references.dimensions(r['parameter']) for r in review_rows},

@@ -136,6 +136,51 @@ class ScenarioServiceTests(unittest.TestCase):
         self.assertEqual(len(results), 10)
         self.assertTrue(all('error' not in json.loads(m['content']) for m in results))
 
+    def test_identical_group_and_country_trajectories_merge(self):
+        self.refs.country_groups['42'] = {'id': '42', 'name': 'Example group', 'long_name': '',
+            'alias': '', 'countries': ['Iraq'], 'invalid_members': []}
+        plan = proposal()
+        plan['proposal']['entries'].append({**plan['proposal']['entries'][0], 'targets': [{'country_group': '42'}]})
+        self.answer(plan)
+        result = self.service.chat({'message': 'Use the same change for the group and Iraq.'})
+        self.assertEqual(result['confirmation']['trajectories'], 1)
+        self.assertEqual(result['confirmation']['merged_duplicates'], 1)
+
+    def test_conflicting_duplicates_ask_user_and_preserve_request(self):
+        plan = proposal()
+        plan['proposal']['entries'].append({'parameter': 'ylm', 'targets': ['Iraq'], 'values': [1, 3]})
+        self.answer(plan)
+        result = self.service.chat({'message': 'Apply the group definition and the country exception.'})
+        self.assertIsNone(result['draft'])
+        self.assertIsNone(result['confirmation'])
+        self.assertIn('Conflicting trajectories for ylm / Iraq', result['reply'])
+        self.assertIn('precedence', result['reply'])
+        self.assertFalse((self.root/'scenarios').exists())
+        self.answer(proposal())
+        resolved = self.service.chat({'session': result['session'], 'message': 'Use the original linear doubling only.'})
+        self.assertIsNotNone(resolved['confirmation'])
+        self.assertTrue(any(m.get('content') == 'Apply the group definition and the country exception.' for m in self.seen[-1][1]))
+
+    def test_duplicate_attachment_changes_are_not_applied_twice(self):
+        plan = proposal(); plan['proposal'].pop('entries')
+        change = {'parameter': 'ylm', 'targets': ['Iraq'], 'start_year': 2023,
+                  'end_year': 2024, 'operation': 'multiply', 'value': 2}
+        plan['proposal']['changes'] = [change, {**change, 'value': '2.0'}]
+        self.answer(plan)
+        result = self.chat({'message': 'Double once.', 'source': {'name': 'Original.sce', 'text': 'CUSTOM,ylm,Iraq,1,1,1\n'}})
+        self.assertEqual(result['draft']['rows'][0]['after'], ['1', '2', '2'])
+        self.assertEqual(result['draft']['merged_duplicates'], 1)
+
+    def test_partially_overlapping_attachment_changes_require_clarification(self):
+        plan = proposal(); plan['proposal'].pop('entries')
+        change = {'parameter': 'ylm', 'targets': ['Iraq'], 'start_year': 2022,
+                  'end_year': 2023, 'operation': 'multiply', 'value': 2}
+        plan['proposal']['changes'] = [change, {**change, 'start_year': 2023, 'end_year': 2024}]
+        self.answer(plan)
+        result = self.service.chat({'message': 'Apply these changes.', 'source': {'name': 'Original.sce', 'text': 'CUSTOM,ylm,Iraq,1,1,1\n'}})
+        self.assertIsNone(result['draft'])
+        self.assertIn('Overlapping adjustments', result['reply'])
+
     def test_plain_text_response_is_retried_without_inventing_a_draft(self):
         self.replies.append({'role': 'assistant', 'content': 'What years and adjustment magnitudes do you want?'})
         self.answer({'reply': 'What years and magnitudes should these changes use?', 'proposal': None})

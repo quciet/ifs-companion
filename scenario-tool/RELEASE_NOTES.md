@@ -1,15 +1,17 @@
-# Scenario Builder 0.3.2
+# Scenario Builder 0.3.3
 
-Fixes the raw JSON parsing error ("Expecting value: line 1 column 1") when an AI
-provider returns an empty answer or ordinary prose instead of the required JSON.
-The builder now retries once with a format-only correction. It explicitly asks
-for clarification when assumptions are missing and prohibits invented values,
-parameters or country memberships.
+Fixes duplicate scenario targets caused by overlapping country selections.
+Identical annual trajectories for the same parameter and complete dimension
+target merge into a single row. The confirmation reports how many identical
+definitions were merged.
 
-If the provider still returns invalid response formatting, research pauses with
-**Continue researching** and **Revise request**. The original request, attachment
-and completed metadata lookups are preserved in the current chat. Proposal
-validation and explicit confirmation remain mandatory.
+Conflicting trajectories now ask the user which definition should apply instead
+of ending the conversation with a raw duplicate-target error. The original
+request and proposed definitions stay in the chat for clarification.
+
+Identical edits to attached scenarios apply once. Other overlapping adjustments
+require clarification so multipliers are not accidentally applied twice.
+Unrelated dimension targets and disjoint time intervals remain independent.
 
 Requires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools** or install
-the downloaded `.ifstool` package from file. Existing saved scenarios are kept.
+the downloaded `.ifstool` package. Existing saved scenarios are kept.
