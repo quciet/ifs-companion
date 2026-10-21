@@ -60,6 +60,8 @@ class References:
     groups: dict
     countries: set
     country_groups: dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
+    installation: str = ""
 
     @classmethod
     def from_installation(cls, installation):
@@ -75,6 +77,9 @@ class References:
         try:
             with closing(sqlite3.connect(variable_db.as_uri() + '?mode=ro', uri=True)) as db:
                 entries = db.execute('SELECT NAME,DIMENSION1,DIMENSION2,DIMENSION3 FROM IFsVar').fetchall()
+                cursor = db.execute('SELECT * FROM IFsVar')
+                columns = [c[0].upper() for c in cursor.description]
+                metadata = {row[0]: dict(zip(columns, row)) for row in cursor}
             parameters = {}
             for name, *flags in entries:
                 if not isinstance(name, str) or not name or name != name.strip() or name in parameters:
@@ -94,7 +99,7 @@ class References:
             # Country dimensions after the first use actual RegionNum indices.
             groups[1] = country_indices
             country_groups = cls.load_country_groups(country_db, country_indices)
-            return cls(parameters, groups, set(names), country_groups)
+            return cls(parameters, groups, set(names), country_groups, metadata, str(root))
         except sqlite3.Error as exc:
             raise ValidationError(f'Cannot read IFs installation references: {exc}') from exc
 
@@ -192,7 +197,7 @@ class References:
         output = []
         for (axis, flag), target in zip(active, targets):
             if axis == 0 and flag == 1:
-                if target not in self.countries:
+                if target not in self.countries and not any(g['name'] == target and g['countries'] and not g['invalid_members'] for g in self.country_groups.values()):
                     raise ValidationError(f"Unknown exact country spelling: {target!r}")
                 output.append(target)
             else:

@@ -1,7 +1,7 @@
-# Scenario Builder 0.3.3
+# Scenario Builder 0.4.0
 
 Scenario Builder is an optional IFsCompanion tool, distributed separately as
-`ifs-scenario-builder-0.3.3-win-x64.ifstool`. Companion 0.3.0 or newer is required.
+`ifs-scenario-builder-0.4.0-win-x64.ifstool`. Companion 0.3.0 or newer is required.
 Model Vetting is the only tool included by default in Companion.
 
 In Companion, open Settings > Manage tools and install Scenario Builder from the
@@ -48,7 +48,7 @@ AI provider. File parsing, validation and export run locally. Stop cancels the
 pending proposal after the current provider call returns (up to its timeout).
 
 To build from the repository, run the packaging Python with
-`scenario-tool/build_tool.py --version 0.3.3`. The package uses Companion's shared
+`scenario-tool/build_tool.py --version 0.4.0`. The package uses Companion's shared
 Python runtime; users do not need a separate Python installation.
 
 Research supports large local metadata batches without a parameter lookup count
@@ -71,3 +71,36 @@ Identical trajectories from overlapping country selections merge into one row,
 with a merge count in the confirmation. Conflicting trajectories or overlapping
 attachment edits prompt a clarification instead of silently overwriting or
 compounding the changes. Research and the original request stay in the chat.
+
+
+Version 0.4.0 reads parameter explanations, units, bounds, shift-up/down settings,
+shift durations and aggregation/common-target flags from the selected installation.
+Its high/low/base tool reads actual country/dimension values from
+`RUNFILES/IFsBase.run.db` using Companion's bundled baseline decoder, read-only.
+High and low are numerical input shifts, not universal severity settings. Missing
+payloads or defaults require clarification; they are not replaced with assumed
+zeros, ones or invented moderate presets. Base retains saved baseline values.
+
+Audited control rules check declared outcome direction against saved baseline
+inputs and conservative explicit phrases in the user's narrative. Corruption
+perception has inverse polarity. Nuclear additions must specify annual versus
+cumulative quantities; cumulative additional-stock paths are converted to annual
+increments, with zero further additions once the stock target is held. Rules do
+not guarantee model outcomes. Controls without an audited outcome polarity are
+marked as requiring review. The confirmation shows interpretations and preset
+calculations. Baseline or metadata changes invalidate pending reviews.
+
+Exports use exact native IFs group names when uniform inputs and saved baseline
+values make the AVG/POP group transform equivalent. Country-specific inputs,
+unequal baselines, SUM allocation and common-target behavior retain explicit
+country records, with the reason shown. Native group files written this way can
+be reopened and expanded for editing/inspection. Other native group allocation
+semantics require explicit resolution before editing; they are never silently
+flattened. ALL subgroup selectors resolve to real indices before baseline lookup.
+
+World at War checks include the reversed-corruption case, all existing nuclear
+states identified from positive baseline GOVNUCWP, seven additional states,
+cumulative nuclear additions and native World/PRB Africa records. Monadic
+migration is explicitly labeled as an approximation rather than an exact
+Africa-to-Africa route constraint. Labour/spending controls do not guarantee
+military headcounts. These checks do not solve an IFs forecast.

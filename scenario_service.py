@@ -15,6 +15,8 @@ from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHand
 import ai_settings
 from scenario_compiler import Compiler, References, ValidationError, ScenarioRows, integer, number
 from installation_validation import validate_installation
+from scenario_intelligence import (Baseline, baseline_path, fingerprint, details, preset_entry, RULES,
+    semantic_entries, compact_groups, expand_native_source, expand_subgroups)
 
 MAX_METADATA_ROUNDS = 16
 MAX_REPEATED_ROUNDS = 3
@@ -63,6 +65,25 @@ country dimension, never to a global parameter or parameter subgroup. All propos
 for explicit user confirmation before a working draft is made. You can ask questions at any time
 with proposal:null; never claim the user has approved a proposal yourself.
 Do not claim a scenario guarantees an absolute model outcome. Explain a multiplier relative to baseline.
+For EVERY entry or change include effect:{direction:"increase|decrease|unchanged|mixed",
+outcome:"intended modeled outcome",quantity:"parameter_input"}. Read parameter_details semantics,
+explanation, units, bounds, affected variable polarity and IFs shift settings before proposing.
+For govnucwpadd quantity MUST be annual_addition or cumulative_addition. For a requested TOTAL
+extra stock over baseline, use cumulative_addition with a zero-based cumulative ramp; the compiler
+converts it to annual increments and stops additions after the stock target is reached.
+cpowf is conventional power conversion, not military personnel or nuclear stockpiles.
+Use baseline_defaults to inspect high/low/base suggestions from actual IFsBase.run.db values.
+To USE one, supply preset:{level:"high|low|base",hold_until:2050} instead of values/ramp.
+High/low refer to numeric input direction, not good/bad outcomes. Missing presets or baseline
+values require clarification, never an assumed 0/1 or an invented moderate setting.
+Do not silently add narrative mechanisms. Distinguish required outcomes, modeling assumptions,
+and optional additions in your reply. Ambiguous inequality directions require clarification.
+The writer preserves native preset group targets only when baseline/aggregation semantics are
+equivalent; otherwise explicit country rows are retained. Explain this in the confirmation.
+For all existing nuclear-armed states use nuclear_states to read positive GOVNUCWP in the
+installed baseline; do not substitute conventional-power controls. Monadic migrateinm/migrateoutm
+do not restrict routes to Africa-to-Africa: disclose that limitation rather than claiming an exact
+intra-African flow intervention. Distinguish military expenditure proxies from military headcounts.
 '''
 
 def tool(name, description, properties, required):
@@ -81,6 +102,15 @@ TOOLS += [tool('search_country_groups', 'Search installed IFs preset country gro
                {'query': {'type': 'string'}}, ['query']),
           tool('country_group_details', 'Read exact installed membership for a preset group id.',
                {'id': {'type': 'string'}}, ['id'])]
+TOOLS += [tool('baseline_defaults', 'Inspect IFs high/low/base settings computed from the actual installed baseline. Exact targets, including a preset country selector, are required.',
+    {'parameter': {'type': 'string'}, 'targets': {'type': 'array', 'items': {'anyOf': [
+        {'type': 'string'}, {'type': 'integer'},
+        {'type': 'object', 'properties': {'country_group': {'type': 'string'}}, 'required': ['country_group'], 'additionalProperties': False},
+        {'type': 'object', 'properties': {'countries': {'type': 'array', 'items': {'type': 'string'}}, 'label': {'type': 'string'}},
+         'required': ['countries', 'label'], 'additionalProperties': False}]}},
+     'level': {'type': 'string', 'enum': ['high', 'low', 'base']}, 'hold_until': {'type': 'integer'}},
+    ['parameter', 'targets', 'level'])]
+TOOLS += [tool('nuclear_states', 'Read countries with positive nuclear stockpiles in the installed base year. This is the authoritative existing-state list.', {}, [])]
 
 
 def expand_country_targets(items, refs):
@@ -92,6 +122,11 @@ def expand_country_targets(items, refs):
         if not isinstance(item, dict) or not isinstance(item.get('targets', []), list):
             raise ValidationError('Ordered target lists are required.')
         targets = item.get('targets', [])
+        if targets and isinstance(targets[0], str) and targets[0] not in refs.countries:
+            group = next((g for g in refs.country_groups.values() if g['name'] == targets[0]), None)
+            if group:
+                targets = [{'country_group': group['id']}, *targets[1:]]
+                item = {**item, 'targets': targets}
         if not targets or not isinstance(targets[0], dict):
             expanded.append(item)
             continue
@@ -118,7 +153,7 @@ def expand_country_targets(items, refs):
         expanded.extend({**item, 'targets': [country, *targets[1:]]} for country in scope['countries'])
         if len(expanded) > 10000:
             raise ValidationError('Country expansion exceeds 10,000 entries.')
-    return expanded, scopes
+    return expand_subgroups(expanded, refs), scopes
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -179,7 +214,7 @@ def expand_entries(entries, base_year):
             start, finish = Decimal(str(ramp['start_value'])), Decimal(str(ramp['end_value']))
             values = [str(start + (finish - start) * Decimal(min(y, end) - base_year) / Decimal(end - base_year))
                       for y in range(base_year, hold + 1)]
-        result.append({'parameter': entry['parameter'], 'targets': entry.get('targets', []), 'values': values})
+        result.append({**{k: v for k, v in entry.items() if k != 'ramp'}, 'targets': entry.get('targets', []), 'values': values})
     return result
 
 
@@ -214,7 +249,8 @@ class ScenarioService:
             definitions = {r[0]: r[1] or '' for r in db.execute('SELECT NAME,DEFINITION FROM IFsVar') if r[0] == r[0].lower()}
         context = {'installation': str(root), 'version': metadata['version'], 'base_year': metadata['base_year']}
         # Export is blocked if installation contents or selection changed since review.
-        digest = hashlib.sha256(json.dumps([context, refs.parameters, refs.groups, sorted(refs.countries), refs.country_groups], sort_keys=True).encode()).hexdigest()
+        digest = hashlib.sha256(json.dumps([context, refs.parameters, refs.groups, sorted(refs.countries), refs.country_groups,
+            refs.metadata, fingerprint(baseline_path(refs))], sort_keys=True).encode()).hexdigest()
         return refs, definitions, context, digest
 
     def chat(self, request):
@@ -256,6 +292,8 @@ class ScenarioService:
                     if not isinstance(content, str) or len(content.encode('utf-8')) > 1_000_000:
                         raise ValidationError('Select a scenario smaller than 1 MB.')
                     rows = compiler.parse(content, Path(source['name']).name)
+                    if refs.installation:
+                        rows = expand_native_source(rows, refs, Baseline(refs, context['base_year']))
                 identity = secrets.token_urlsafe(24)
                 session = {'history': [], 'source': rows, 'digest': digest, 'busy': False, 'draft': None}
                 self.sessions[identity] = session
@@ -353,7 +391,8 @@ class ScenarioService:
                 return self.pause(identity, session, messages, context, 'rounds')
             try:
                 proposal = reply.get('proposal')
-                draft = self.prepare(compiler, source, proposal, context) if proposal is not None else None
+                narrative = '\n'.join(m['content'] for m in messages if m['role'] == 'user' and isinstance(m.get('content'), str))
+                draft = self.prepare(compiler, source, proposal, context, narrative) if proposal is not None else None
             except ScenarioConflict as exc:
                 clarification = (str(exc) + ' No draft was created. Which definition should apply to this target? '
                     'Please specify the intended trajectory or which group/country rule takes precedence.')
@@ -433,7 +472,18 @@ class ScenarioService:
             flags = refs.dimensions(parameter)
             result = {'parameter': parameter, 'definition': definitions.get(parameter), 'dimensions': flags,
                       'groups': {f: refs.groups.get(f, {}) for axis, f in enumerate(flags) if f > 1 or (axis > 0 and f == 1)},
-                      'countries': sorted(refs.countries) if flags[0] == 1 else []}
+                      'countries': sorted(refs.countries) if flags[0] == 1 else [], 'interpretation': details(refs, parameter)}
+        elif name == 'baseline_defaults':
+            refs.dimensions(parameter)
+            entries, _ = expand_country_targets([{'parameter': parameter, 'targets': args['targets'],
+                'preset': {k: args[k] for k in ('level', 'hold_until') if k in args}}], refs)
+            baseline = Baseline(refs, compiler.base_year)
+            results = [preset_entry(e, refs, baseline)[1] for e in entries]
+            result = {'parameter': parameter, 'suggestions': results, 'interpretation': details(refs, parameter),
+                      'warning': 'These are numeric IFs shifts, not outcome severity levels. No proposal has been applied.'}
+        elif name == 'nuclear_states':
+            baseline = Baseline(refs, compiler.base_year)
+            result = {'states': baseline.nuclear_states(), 'base_year': compiler.base_year, 'source': str(baseline.path)}
         elif name == 'search_country_groups':
             terms = str(args['query']).casefold().split()
             found = [g for g in refs.country_groups.values() if all(
@@ -467,6 +517,9 @@ class ScenarioService:
         return {'id': review['id'], 'purpose': review['purpose'],
                 'regeneration_prompt': review['regeneration_prompt'], 'geographies': review['geographies'],
                 'merged_duplicates': review.get('merged_duplicates', 0),
+                'semantics': review.get('semantics', []), 'presets': review.get('presets', []),
+                'group_writing': review.get('group_writing', []),
+                'warnings': review.get('warnings', []),
                 'parameters': sorted(review['dimensions']), 'trajectories': len(review['rows'])}
 
     def confirm(self, request):
@@ -486,16 +539,42 @@ class ScenarioService:
             return {'session': request['session'], 'reply': reply, 'draft': pending['review'],
                     'confirmation': None, 'context': context}
 
-    def prepare(self, compiler, source, proposal, context):
+    def prepare(self, compiler, source, proposal, context, narrative=''):
         if not isinstance(proposal, dict):
             raise ValidationError('A proposal must be an object.')
         key = 'entries' if source is None else 'changes'
         expanded, geographies = expand_country_targets(proposal.get(key), compiler.references)
         proposal = {**proposal, key: expanded}
+        baseline = Baseline(compiler.references, compiler.base_year) if compiler.references.installation else None
+        presets, semantics = [], []
         if source is None:
             if 'changes' in proposal or not proposal.get('entries'):
                 raise ValidationError('A new scenario requires parameter entries.')
-            entries = expand_entries(proposal['entries'], compiler.base_year)
+            entries = []
+            for entry in proposal['entries']:
+                if 'preset' in entry:
+                    try:
+                        entry, receipt = preset_entry(entry, compiler.references, baseline)
+                    except (ValidationError, OSError, sqlite3.Error) as error:
+                        raise ScenarioConflict('IFs preset needs clarification: '+str(error)) from None
+                    presets.append(receipt)
+                entries.append(entry)
+            entries = expand_entries(entries, compiler.base_year)
+            try:
+                base_presets = {(p['parameter'], tuple(compiler.references.targets(p['parameter'], p['targets']))) for p in presets if p['level'] == 'base'}
+                references = []
+                for entry in entries:
+                    key = (entry['parameter'], tuple(compiler.references.targets(entry['parameter'], entry.get('targets', []))))
+                    if key in base_presets:
+                        references.append(entry['values'])
+                    elif baseline and entry['parameter'] in RULES and entry['parameter'] != 'govnucwpadd':
+                        references.append([baseline.value(entry['parameter'], entry.get('targets', []), compiler.base_year+i)
+                                           for i in range(len(entry['values']))])
+                    else:
+                        references.append(None)
+                entries, semantics = semantic_entries(entries, compiler.references, narrative, references)
+            except (ValidationError, OSError, sqlite3.Error) as error:
+                raise ScenarioConflict('Semantic check: '+str(error)) from None
             if any(len(e['values']) > 2500 - compiler.base_year + 1 for e in entries):
                 raise ValidationError('Scenario trajectory exceeds year 2500.')
             rows = ScenarioRows()
@@ -539,6 +618,7 @@ class ScenarioService:
                 previous.append(signature)
                 changes.append(change)
             for change in changes:
+                before_rows = rows
                 if change['operation'] == 'set_linear':
                     start, end = change['start_year'], change['end_year']
                     # Reuse compiler validation for exact row and existing year coverage.
@@ -557,6 +637,17 @@ class ScenarioService:
                     rows = checked
                 else:
                     rows = compiler.modify(rows, [change])
+                if compiler.references.metadata:
+                    count = sum(f > 0 for f in compiler.references.dimensions(change['parameter']))
+                    prefix = ['CUSTOM', change['parameter'], *compiler.references.targets(change['parameter'], change.get('targets', []))]
+                    before = next(r for r in before_rows if r[:len(prefix)] == prefix)
+                    after = next(r for r in rows if r[:len(prefix)] == prefix)
+                    try:
+                        _, receipts = semantic_entries([{'parameter': change['parameter'], 'targets': prefix[2:],
+                            'values': after[2+count:], 'effect': change.get('effect')}], compiler.references, narrative, [before[2+count:]])
+                    except ValidationError as error:
+                        raise ScenarioConflict('Semantic check: '+str(error)) from None
+                    semantics.extend(receipts)
         purpose, prompt = proposal['purpose'], proposal['regeneration_prompt']
         # Run all export validation before presenting the draft.
         compiler.render(rows, purpose=purpose, regeneration_prompt=prompt, model_context=context)
@@ -584,18 +675,36 @@ class ScenarioService:
                                 'before': None if before is None else before[len(prefix):], 'after': values})
         if not review_rows:
             raise ValidationError('The proposed adjustments do not change any values.')
+        warnings = []
+        if baseline and re.search(r'all\s+(?:existing\s+)?nuclear[- ]armed\s+states', narrative, re.IGNORECASE):
+            try:
+                armed = {s['country'] for s in baseline.nuclear_states()}
+            except (ValidationError, OSError, sqlite3.Error) as error:
+                raise ScenarioConflict('Cannot verify existing nuclear-state coverage: '+str(error)) from None
+            targeted = {r['targets'][0] for r in review_rows if r['parameter'] == 'govnucwpadd'}
+            if armed-targeted:
+                raise ScenarioConflict('The narrative asks for all existing nuclear-armed states, but stockpile additions omit: '+', '.join(sorted(armed-targeted))+'.')
+        if re.search(r'intra[- ]African', narrative, re.IGNORECASE) and any(r['parameter'] in ('migrateinm','migrateoutm') for r in review_rows):
+            warnings.append('Country-level migration multipliers do not restrict the added flows to Africa-to-Africa. This is a migration approximation, not an exact bilateral route intervention.')
+        if re.search(r'military\s+participation', narrative, re.IGNORECASE):
+            warnings.append('Labour and military-expenditure controls are proxies; no military personnel/headcount change is guaranteed.')
         covered = {c for g in geographies for c in g['countries']}
         individual = sorted({r['targets'][0] for r in review_rows
                              if compiler.references.dimensions(r['parameter'])[0] == 1} - covered)
         if individual:
             geographies.append({'kind': 'Explicit IFs countries', 'name': 'Individual targets', 'countries': individual})
+        export_rows, group_writing = compact_groups(rows, compiler.references, baseline, geographies) if baseline else (rows, [])
+        compiler.render(export_rows, purpose=purpose, regeneration_prompt=prompt, model_context=context)
         review = {'id': secrets.token_urlsafe(24), 'purpose': purpose, 'regeneration_prompt': prompt,
                   'merged_duplicates': merged_duplicates,
+                  'semantics': list({json.dumps(s, sort_keys=True): s for s in semantics}.values()),
+                  'presets': presets, 'group_writing': group_writing,
+                  'warnings': warnings,
                   'geographies': geographies,
                   'filename': proposal.get('filename', 'Scenario.sce'), 'rows': review_rows,
                   'dimensions': {r['parameter']: compiler.references.dimensions(r['parameter']) for r in review_rows},
                   'source': None if source is None else source.source}
-        return {'review': review, 'rows': rows, 'purpose': purpose, 'prompt': prompt}
+        return {'review': review, 'rows': export_rows, 'purpose': purpose, 'prompt': prompt}
 
     def preview(self, request):
         """Render a reviewed draft locally without creating or overwriting a file."""

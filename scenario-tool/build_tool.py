@@ -61,7 +61,7 @@ if __name__=='__main__':
     else:
         parser=argparse.ArgumentParser(description='Build a shared-Python Companion tool. Use --standalone for the legacy format.')
         parser.add_argument('--python',default=sys.executable)
-        parser.add_argument('--version',default='0.3.3')
+        parser.add_argument('--version',default='0.4.0')
         parser.add_argument('--release-notes')
         parser.add_argument('--release-date')
         args=parser.parse_args()

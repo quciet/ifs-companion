@@ -61,7 +61,7 @@ def main():
         elif args.tool=='ifs-scenario-builder':
             for name in ('service.py','index.html','base.css','bridge.js'):
                 shutil.copy2(source/'scenario-tool'/name,stage/name)
-            for name in ('scenario_service.py','scenario_compiler.py','ai_settings.py','installation_validation.py','scenario.js','scenario.css','LICENSE'):
+            for name in ('scenario_service.py','scenario_compiler.py','scenario_intelligence.py','ai_settings.py','installation_validation.py','scenario.js','scenario.css','LICENSE'):
                 shutil.copy2(source/name,stage/name)
             # Static files are beside the service in the tool package.
             p=stage/'service.py'
