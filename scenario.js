@@ -1,24 +1,42 @@
 'use strict';
 (()=>{
-  let session=null,source=null,draft=null,busy=false,selectedRow=null;
+  let session=null,source=null,draft=null,busy=false,selectedRow=null,pending=null;
   const el=id=>document.getElementById(id);
   const controls=['scenarioSend','scenarioAttach','scenarioReplace','scenarioRemove','scenarioNew','scenarioSave','scenarioViewFile'];
-  function setBusy(value){busy=value;for(const id of controls)el(id).disabled=value;el('scenarioSend').textContent=value?'Thinking…':'Send ↑';}
+  function updateComposer(){el('scenarioSend').disabled=busy||(!el('scenarioPrompt').value.trim()&&!(source&&!session));el('scenarioSend').setAttribute('aria-label',busy?'Waiting for response':'Send message');el('scenarioSend').title=busy?'Waiting for response':'Send message';el('scenarioComposer').classList.toggle('is-busy',busy);el('scenarioComposer').setAttribute('aria-busy',String(busy));}
+  function setBusy(value){busy=value;for(const id of controls)el(id).disabled=value;updateComposer();}
+  function sizePrompt(){const input=el('scenarioPrompt');input.style.height='auto';input.style.height=Math.min(200,Math.max(64,input.scrollHeight))+'px';updateComposer();}
   function note(text,error=false){el('scenarioStatus').textContent=text;el('scenarioStatus').classList.toggle('scenario-error',error);}
-  function message(text,role){const div=document.createElement('div');div.className='scenario-message '+role;div.textContent=text;el('scenarioMessages').append(div);div.scrollIntoView({block:'nearest'});}
-  function resetDraft(){draft=null;selectedRow=null;el('scenarioSummary').hidden=true;el('scenarioExportResult').replaceChildren();el('scenarioInspector').close();el('scenarioFileDialog').close();el('scenarioFileText').textContent='';}
-  function reset(){session=null;resetDraft();el('scenarioMessages').replaceChildren();el('scenarioPrompt').value='';message(source?'Scenario attached. Ask me to inspect it, explain its assumptions, or propose changes.':'Describe a new scenario, or attach a .sce file to inspect or modify.','assistant');note('');}
+  function message(text,role,label=role==='user'?'You':'Scenario Builder'){
+    const div=document.createElement('div');div.className='scenario-message '+role;div.setAttribute('aria-label',label);
+    const speaker=document.createElement('div');speaker.className='scenario-speaker';speaker.textContent=label;
+    const body=document.createElement('div');body.className='scenario-message-body';body.textContent=text;
+    div.append(speaker,body);el('scenarioMessages').append(div);div.scrollIntoView({block:'nearest'});return div;
+  }
+  function resetDraft(){draft=null;pending=null;for(const button of document.querySelectorAll('.scenario-confirm-button'))button.disabled=true;selectedRow=null;el('scenarioSummary').hidden=true;el('scenarioExportResult').replaceChildren();el('scenarioInspector').close();el('scenarioFileDialog').close();el('scenarioFileText').textContent='';}
+  function reset(preservePrompt=false){session=null;resetDraft();el('scenarioMessages').replaceChildren();if(!preservePrompt)el('scenarioPrompt').value='';message(source?'Scenario attached. Ask me to inspect it, explain its assumptions, or propose changes.':'Describe a new scenario, or attach a .sce file to inspect or modify.','assistant');note('');sizePrompt();}
   function sourceChip(){el('scenarioSource').hidden=!source;el('scenarioSourceName').textContent=source?.name||'';}
   el('scenarioAttach').onclick=el('scenarioReplace').onclick=()=>el('scenarioFile').click();
-  el('scenarioFile').onchange=async()=>{
-    const file=el('scenarioFile').files[0];if(!file||busy)return;
+  async function attachFile(file){
+    if(!file||busy)return;
     if(!file.name.toLowerCase().endsWith('.sce')||file.size>1_000_000){note('Choose a .sce file smaller than 1 MB.',true);return;}
-    if((draft||session)&&!await confirmTool('Replace scenario source?','The working draft and conversation will be cleared. Previously saved scenario files remain available.','Replace'))return;
+    setBusy(true);
+    try{
+    if((draft||session)&&!await confirmTool('Replace scenario source?','The working draft and conversation will be cleared. Your typed message and saved scenario files will be kept.','Replace'))return;
     const bytes=new Uint8Array(await file.arrayBuffer());
     let text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{note('This file is not UTF-8. Convert a copy to UTF-8 before attaching it.',true);return;}
-    source={name:file.name,text};sourceChip();reset();note('Attached locally. Relevant scenario rows will be sent to your AI provider when you send a message.');el('scenarioFile').value='';
-  };
-  el('scenarioRemove').onclick=async()=>{if((draft||session)&&!await confirmTool('Remove scenario source?','This clears the conversation and working draft. Your original file is unchanged.','Remove'))return;source=null;sourceChip();reset();};
+    source={name:file.name,text};sourceChip();reset(true);note('Attached locally. Send your message when ready, or send the file alone for an overview.');el('scenarioPrompt').focus();
+    }catch(error){note('Could not read the attached file. '+error.message,true);}finally{setBusy(false);}
+  }
+  el('scenarioFile').onchange=async()=>{const file=el('scenarioFile').files[0];el('scenarioFile').value='';await attachFile(file);};
+  let dragDepth=0;
+  el('scenarioComposer').ondragenter=event=>{if(event.dataTransfer?.types.includes('Files')){event.preventDefault();dragDepth++;if(!busy)el('scenarioComposer').classList.add('is-dragging');}};
+  el('scenarioComposer').ondragover=event=>{if(event.dataTransfer?.types.includes('Files')){event.preventDefault();event.dataTransfer.dropEffect=busy?'none':'copy';}};
+  el('scenarioComposer').ondragleave=()=>{if(--dragDepth<=0){dragDepth=0;el('scenarioComposer').classList.remove('is-dragging');}};
+  el('scenarioComposer').ondrop=async event=>{event.preventDefault();dragDepth=0;el('scenarioComposer').classList.remove('is-dragging');const files=event.dataTransfer?.files;if(!files?.length||busy)return;if(files.length!==1){note('Attach one .sce file at a time.',true);return;}await attachFile(files[0]);};
+  el('scenarioPrompt').oninput=sizePrompt;
+  el('scenarioPrompt').onkeydown=event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();if(!busy)el('scenarioForm').requestSubmit();}};
+  el('scenarioRemove').onclick=async()=>{if((draft||session)&&!await confirmTool('Remove scenario source?','This clears the conversation and working draft. Your original file and typed message are kept.','Remove'))return;source=null;sourceChip();reset(true);};
   el('scenarioNew').onclick=async()=>{if((draft||session)&&!await confirmTool('Start a new scenario chat?','This clears the conversation, attachment and unsaved draft. Saved files remain available.','New chat'))return;source=null;sourceChip();reset();};
   function renderDraft(value){resetDraft();draft=value;if(!draft)return;
     const parameters=new Set(draft.rows.map(r=>r.parameter)),countries=new Set();let global=false;
@@ -28,6 +46,21 @@
     el('scenarioPurpose').textContent=draft.purpose;el('scenarioSummary').hidden=false;
     el('scenarioFilename').value=draft.filename;el('scenarioRegeneration').textContent=draft.regeneration_prompt;
     options(el('scenarioParameter'),[...parameters].sort().map(p=>[p,p]));
+  }
+  function receive(result){
+    session=result.session;message(result.reply,'assistant');renderDraft(result.draft);updateComposer();
+    el('scenarioContext').textContent=result.context.version+' · Base year '+result.context.base_year+' · '+result.context.installation;
+    pending=result.confirmation||null;
+    if(pending){
+      const value=pending,card=message('','assistant','Scenario Builder · Confirmation');
+      const summary=document.createElement('p');summary.textContent='Confirm scenario: '+value.purpose+'\nParameters: '+value.parameters.join(', ')+' · '+value.trajectories+' trajectories';card.append(summary);
+      const intent=document.createElement('p');intent.textContent=value.regeneration_prompt;card.append(intent);
+      for(const group of value.geographies){const details=document.createElement('details'),label=document.createElement('summary'),members=document.createElement('p');label.textContent=group.kind+' · '+group.name+' · '+group.countries.length+' countries';members.textContent=group.countries.join(', ');details.append(label,members);card.append(details);}
+      const approve=document.createElement('button');approve.type='button';approve.className='scenario-confirm-button';approve.textContent='Confirm and build draft';
+      approve.onclick=async()=>{if(busy||pending?.id!==value.id)return;setBusy(true);approve.disabled=true;note('Building confirmed draft…');try{const result=await api('/api/scenario/chat',{session,confirmation:value.id});receive(result);}catch(error){note(error.message,true);approve.disabled=false;}finally{setBusy(false);}};
+      const revise=document.createElement('button');revise.type='button';revise.textContent='Revise in chat';revise.onclick=()=>el('scenarioPrompt').focus();card.append(approve,revise);el('scenarioMessages').append(card);card.scrollIntoView({block:'nearest'});
+    }
+    note(pending?'Review the scope and country membership, then confirm or describe a revision.':result.draft?'Confirmed draft ready to inspect. Saving is a separate step.':'');
   }
   function options(select,items){select.replaceChildren();for(const [value,label] of items){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}}
   function selectParameter(){if(!draft)return;const name=el('scenarioParameter').value,rows=draft.rows.filter(r=>r.parameter===name),flags=draft.dimensions[name];
@@ -80,12 +113,12 @@
   el('scenarioFileClose').onclick=()=>el('scenarioFileDialog').close();
   el('scenarioSourceFile').onclick=()=>{if(source)showFile(source.text,source.name,'Original attached file · unchanged');};
   el('scenarioViewFile').onclick=async()=>{if(!draft||busy)return;const identity=draft.id;setBusy(true);try{const result=await api('/api/scenario/preview',{session,draft:identity});if(draft?.id===identity)showFile(result.text,result.filename,'Unsaved draft · creation time is finalized when saved');}catch(error){note(error.message,true);}finally{setBusy(false);}};
-  el('scenarioForm').onsubmit=async event=>{event.preventDefault();if(busy)return;const text=el('scenarioPrompt').value.trim();if(!text)return;
-    message(text,'user');el('scenarioPrompt').value='';resetDraft();setBusy(true);note('Checking model metadata and contacting the AI provider…');
-    try{const result=await api('/api/scenario/chat',{message:text,session,source:session?null:source});session=result.session;message(result.reply,'assistant');renderDraft(result.draft);el('scenarioContext').textContent=result.context.version+' · Base year '+result.context.base_year+' · '+result.context.installation;note(result.draft?'Validated proposal ready for review. Saving is a separate step.':'');}
-    catch(error){note(error.message,true);}finally{setBusy(false);el('scenarioPrompt').focus();}
+  el('scenarioForm').onsubmit=async event=>{event.preventDefault();if(busy)return;const typed=el('scenarioPrompt').value;const text=typed.trim()||(source&&!session?'Inspect the attached scenario and summarize its parameters and scope. Do not propose changes yet.':'');if(!text)return;
+    message((source&&!session?'Attached: '+source.name+'\n\n':'')+text,'user');el('scenarioPrompt').value='';sizePrompt();resetDraft();setBusy(true);note('Checking model metadata and contacting the AI provider…');
+    try{const result=await api('/api/scenario/chat',{message:text,session,source:session?null:source});receive(result);}
+    catch(error){if(!el('scenarioPrompt').value)el('scenarioPrompt').value=typed;sizePrompt();note(error.message,true);}finally{setBusy(false);el('scenarioPrompt').focus();}
   };
   el('scenarioSave').onclick=async()=>{if(busy||!draft)return;const filename=el('scenarioFilename').value.trim();setBusy(true);note('Saving reviewed scenario…');try{const result=await api('/api/scenario/export',{session,draft:draft.id,filename});const parent=el('scenarioExportResult');parent.replaceChildren();const text=document.createElement('p');text.textContent='Saved: '+result.path;const link=document.createElement('a');link.href=result.download;link.download=result.filename;link.textContent='Download .sce';parent.append(text,link);note('Saved with descriptive comments. Existing files were not overwritten.');}catch(error){note(error.message,true);}finally{setBusy(false);}};
-  window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;el('scenarioPrompt').focus();},stopReset(){const prompt=el('scenarioPrompt').value;reset();el('scenarioPrompt').value=prompt;}};
+  window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;sizePrompt();el('scenarioPrompt').focus();},stopReset(){reset(true);}};
   reset();
 })();

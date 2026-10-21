@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from scenario_compiler import Compiler, References, ValidationError
-from scenario_service import ScenarioService
+from scenario_service import ScenarioService, expand_country_targets
 
 
 def proposal():
@@ -38,9 +38,69 @@ class ScenarioServiceTests(unittest.TestCase):
     def answer(self, value):
         self.replies.append({'role': 'assistant', 'content': json.dumps(value)})
 
+    def chat(self, request):
+        result = self.service.chat(request)
+        if result.get('confirmation'):
+            result = self.service.chat({'session': result['session'], 'confirmation': result['confirmation']['id']})
+        return result
+
+    def test_confirmation_required_before_preview_export_and_no_ai_on_confirm(self):
+        self.answer(proposal())
+        result = self.service.chat({'message': 'Double yield.'})
+        self.assertIsNone(result['draft'])
+        token = result['confirmation']['id']
+        self.assertEqual(result['confirmation']['geographies'][0]['countries'], ['Iraq'])
+        request = {'session': result['session'], 'draft': token, 'filename': 'Iraq.sce'}
+        with self.assertRaises(ValidationError): self.service.preview(request)
+        with self.assertRaises(ValidationError): self.service.export(request)
+        with self.assertRaises(ValidationError): self.service.chat({'session': result['session'], 'confirmation': 'wrong'})
+        confirmed = self.service.chat({'session': result['session'], 'confirmation': token})
+        self.assertIsNotNone(confirmed['draft'])
+        self.assertEqual(len(self.seen), 1)
+        with self.assertRaises(ValidationError): self.service.chat({'session': result['session'], 'confirmation': token})
+
+    def test_revision_and_installation_change_invalidate_confirmation(self):
+        self.answer(proposal())
+        result = self.service.chat({'message': 'Double yield.'})
+        request = {'session': result['session'], 'confirmation': result['confirmation']['id']}
+        with patch.object(self.service, 'context', return_value=(self.refs, {}, self.context, 'changed')):
+            with self.assertRaises(ValidationError): self.service.chat(request)
+        self.answer({'reply': 'What should change?', 'proposal': None})
+        self.service.chat({'session': result['session'], 'message': 'Revise this.'})
+        with self.assertRaises(ValidationError): self.service.chat(request)
+
+    def test_preset_lookup_and_server_expansion(self):
+        self.refs.countries.add('Jordan')
+        self.refs.country_groups['42'] = {'id': '42', 'name': 'Example preset', 'long_name': '',
+            'alias': 'Middle East', 'countries': ['Iraq', 'Jordan'], 'invalid_members': []}
+        for name, args in [('search_country_groups', {'query': 'Middle East'}), ('country_group_details', {'id': '42'})]:
+            self.replies.append({'role': 'assistant', 'content': None, 'tool_calls': [
+                {'id': name, 'type': 'function', 'function': {'name': name, 'arguments': json.dumps(args)}}]})
+        plan = proposal(); plan['proposal']['entries'][0]['targets'] = [{'country_group': '42'}]
+        self.answer(plan)
+        pending = self.service.chat({'message': 'Use Middle East.'})
+        self.assertEqual(pending['confirmation']['geographies'][0]['countries'], ['Iraq', 'Jordan'])
+        result = self.service.chat({'session': pending['session'], 'confirmation': pending['confirmation']['id']})
+        self.assertEqual([r['targets'] for r in result['draft']['rows']], [['Iraq'], ['Jordan']])
+        self.assertEqual(json.loads(self.seen[1][1][-1]['content'])['matches'][0]['id'], '42')
+
+    def test_custom_country_validation_and_subgroup_preservation(self):
+        self.refs.parameters['sector'] = (1, 2, 0)
+        item = {'parameter': 'sector', 'targets': [{'countries': ['Iraq'], 'label': 'Custom scope'}, 7], 'values': [1]}
+        expanded, scopes = expand_country_targets([item], self.refs)
+        self.assertEqual(expanded[0]['targets'], ['Iraq', 7])
+        self.assertIn('Custom', scopes[0]['kind'])
+        for countries in (['Atlantis'], ['iraq'], ['Iraq', 'Iraq'], []):
+            with self.assertRaises(ValidationError):
+                expand_country_targets([{**item, 'targets': [{'countries': countries, 'label': 'Custom'}]}], self.refs)
+        with self.assertRaises(ValidationError):
+            expand_country_targets([{**item, 'parameter': 'globalp'}], self.refs)
+        with self.assertRaises(ValidationError):
+            expand_country_targets([{**item, 'targets': [{'country_group': 'invented'}]}], self.refs)
+
     def test_draft_review_export_and_comments(self):
         self.answer(proposal())
-        reply = self.service.chat({'message': 'Double Iraq baseline yield by 2100.'})
+        reply = self.chat({'message': 'Double Iraq baseline yield by 2100.'})
         self.assertFalse((self.root/'scenarios').exists())
         row = reply['draft']['rows'][0]
         self.assertEqual((row['after'][0], row['after'][-1], len(row['after'])), ('1', '2', 79))
@@ -58,7 +118,7 @@ class ScenarioServiceTests(unittest.TestCase):
         self.replies.append({'role': 'assistant', 'content': None, 'tool_calls': [
             {'id': 'lookup', 'type': 'function', 'function': {'name': 'parameter_details', 'arguments': '{"parameter":"ylm"}'}}]})
         self.answer({'reply': 'Do you mean baseline yield or absolute yield?', 'proposal': None})
-        result = self.service.chat({'message': 'Double yield.'})
+        result = self.chat({'message': 'Double yield.'})
         self.assertIsNone(result['draft'])
         self.assertEqual(json.loads(self.seen[-1][1][-1]['content'])['dimensions'], [1, 0, 0])
 
@@ -66,7 +126,7 @@ class ScenarioServiceTests(unittest.TestCase):
         plan = proposal()
         plan['proposal']['entries'].append({'parameter': 'globalp', 'targets': [], 'values': [1, 1.2, 1.4]})
         self.answer(plan)
-        reply = self.service.chat({'message': 'Include a global input.'})
+        reply = self.chat({'message': 'Include a global input.'})
         self.assertEqual(reply['draft']['dimensions']['globalp'], (0, 0, 0))
         self.assertEqual(reply['draft']['rows'][1]['target_labels'], [])
         request = {'session': reply['session'], 'draft': reply['draft']['id']}
@@ -93,7 +153,7 @@ class ScenarioServiceTests(unittest.TestCase):
         plan['proposal']['changes'] = [{'parameter': 'ylm', 'targets': ['Iraq'], 'start_year': 2023,
                                        'end_year': 2024, 'operation': 'multiply', 'value': 2}]
         self.answer(plan)
-        reply = self.service.chat({'message': 'Double ylm in 2023–24.', 'source': {'name': 'Original.sce', 'text': source}})
+        reply = self.chat({'message': 'Double ylm in 2023–24.', 'source': {'name': 'Original.sce', 'text': source}})
         review = reply['draft']['rows']
         self.assertEqual(len(review), 1)
         self.assertEqual(review[0]['before'], ['1', '1', '1'])
@@ -107,20 +167,20 @@ class ScenarioServiceTests(unittest.TestCase):
     def test_invalid_parameter_and_missing_ai_fail_closed(self):
         plan = proposal(); plan['proposal']['entries'][0]['parameter'] = 'invented'
         self.answer(plan)
-        with self.assertRaises(ValidationError): self.service.chat({'message': 'Do something.'})
+        with self.assertRaises(ValidationError): self.chat({'message': 'Do something.'})
         with patch('scenario_service.ai_settings.load', return_value={'configured': False}):
-            with self.assertRaises(ValidationError): self.service.chat({'message': 'Do something.'})
+            with self.assertRaises(ValidationError): self.chat({'message': 'Do something.'})
         self.assertFalse((self.root/'scenarios').exists())
 
     def test_old_draft_and_changed_installation_cannot_export(self):
-        self.answer(proposal()); reply = self.service.chat({'message': 'Double yield.'})
+        self.answer(proposal()); reply = self.chat({'message': 'Double yield.'})
         with self.assertRaises(ValidationError):
             self.service.export({'session': reply['session'], 'draft': 'stale', 'filename': 'Iraq.sce'})
         with patch.object(self.service, 'context', return_value=(self.refs, {}, self.context, 'new-digest')):
             with self.assertRaises(ValidationError):
                 self.service.export({'session': reply['session'], 'draft': reply['draft']['id'], 'filename': 'Iraq.sce'})
         self.answer({'reply': 'Please clarify.', 'proposal': None})
-        self.service.chat({'session': reply['session'], 'message': 'Actually change something else.'})
+        self.chat({'session': reply['session'], 'message': 'Actually change something else.'})
         with self.assertRaises(ValidationError):
             self.service.export({'session': reply['session'], 'draft': reply['draft']['id'], 'filename': 'Iraq.sce'})
 
@@ -129,7 +189,7 @@ class ScenarioServiceTests(unittest.TestCase):
         plan['proposal']['changes'] = [{'parameter': 'ylm', 'targets': ['Iraq'], 'start_year': 2022,
             'end_year': 2024, 'operation': 'set_linear', 'start_value': 1, 'end_value': 2}]
         self.answer(plan)
-        reply = self.service.chat({'message': 'Ramp.', 'source': {'name': 'Original.sce', 'text': 'CUSTOM,ylm,Iraq,1,1,1\n'}})
+        reply = self.chat({'message': 'Ramp.', 'source': {'name': 'Original.sce', 'text': 'CUSTOM,ylm,Iraq,1,1,1\n'}})
         self.assertEqual(reply['draft']['rows'][0]['after'], ['1', '1.5', '2'])
         for name in ('../escape.sce', 'CON.sce', 'file.exe'):
             with self.assertRaises(ValidationError):

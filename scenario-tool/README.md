@@ -1,7 +1,7 @@
-# Scenario Builder 0.1.0
+# Scenario Builder 0.3.0
 
 Scenario Builder is an optional IFsCompanion tool, distributed separately as
-`ifs-scenario-builder-0.1.0-win-x64.ifstool`. Companion 0.2.1 or newer is required.
+`ifs-scenario-builder-0.3.0-win-x64.ifstool`. Companion 0.3.0 or newer is required.
 Model Vetting is the only tool included by default in Companion.
 
 In Companion, open Settings > Manage tools and install Scenario Builder from the
@@ -13,6 +13,25 @@ Settings. The provider must support Chat Completions function tools. The tool
 reads current shared settings for every request; it does not store a separate key.
 
 Describe a new scenario or attach a UTF-8 `.sce` file up to 1 MB. Review the compact
+chat composer: use **+** or drop one `.sce` onto the input, then send with the arrow
+or Enter. Shift+Enter adds a line. Attachments appear inside the composer and keep
+your typed message; they are sent to the AI only when you send. Sending a newly
+attached file without a message requests an overview without proposed changes.
+Replacing or removing a source after a conversation starts requires confirmation
+and clears that conversation; your typed message is kept.
+
+Review the
+confirmation in chat and approve **Confirm and build draft**, or describe a revision.
+No draft can be previewed or exported before this explicit confirmation.
+For regional requests the AI searches `DATA/IFs.db` preset groups and aliases,
+then reads their membership. Ambiguous definitions require clarification. Selected
+presets expand locally into exact IFs countries; `IFS.grp` remains the separate
+parameter dimension index. If no preset fits, a custom list must use exact installed
+country names and is labeled as custom in the confirmation. Expand the country
+membership details to inspect the full list. Changes to the installation or a new
+chat message invalidate the previous confirmation.
+
+After confirmation, review the compact
 proposal summary, optionally inspect a parameter/country/subgroup trajectory,
 compare original and proposed inputs, or view the draft file before saving.
 Global parameters have no country selector. The graph shows scenario input
@@ -29,5 +48,5 @@ AI provider. File parsing, validation and export run locally. Stop cancels the
 pending proposal after the current provider call returns (up to its timeout).
 
 To build from the repository, run the packaging Python with
-`scenario-tool/build_tool.py`. The package includes its Python runtime and does
-not require a separate Python installation. The executable is unsigned.
+`scenario-tool/build_tool.py --version 0.3.0`. The package uses Companion's shared
+Python runtime; users do not need a separate Python installation.

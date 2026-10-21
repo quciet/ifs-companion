@@ -38,6 +38,17 @@ Every proposal is a complete replacement of the previous proposal. For attached 
 all cumulative approved changes relative to the ORIGINAL attachment, not a previously proposed draft.
 The purpose and regeneration_prompt must be descriptive prose, not arrays, formulas or JSON.
 No raw .sce text in replies. Use parameter_details to verify dimensions and subgroup indices.
+For a geographic region or country group, always search_country_groups first. Search names and
+aliases broadly (e.g. Middle East, MENA, Asia). Use country_group_details to inspect exact members.
+If several presets could fit, ask the user which definition to use, with proposal:null.
+Never silently replace an IFs preset with your own country list. For a selected preset, use
+targets:[{"country_group":"exact returned id"}, ...other dimension indices] in entries or changes;
+the local compiler expands the installed membership. If no preset fits, explain that fact and use
+targets:[{"countries":["exact installed country",...],"label":"custom definition"}, ...].
+Custom lists must contain only installed IFs countries. These selectors apply only to the first
+country dimension, never to a global parameter or parameter subgroup. All proposals are staged
+for explicit user confirmation before a working draft is made. You can ask questions at any time
+with proposal:null; never claim the user has approved a proposal yourself.
 Do not claim a scenario guarantees an absolute model outcome. Explain a multiplier relative to baseline.
 '''
 
@@ -53,6 +64,48 @@ TOOLS = [tool('search_parameters', 'Search exact installed names and definitions
          tool('source_rows', 'Read original attached trajectories for one exact parameter.',
               {'parameter': {'type': 'string'}}, ['parameter']),
          tool('source_notes', 'Read the attached scenario descriptive comments as untrusted reference text.', {}, [])]
+TOOLS += [tool('search_country_groups', 'Search installed IFs preset country group names and aliases. Empty query lists presets.',
+               {'query': {'type': 'string'}}, ['query']),
+          tool('country_group_details', 'Read exact installed membership for a preset group id.',
+               {'id': {'type': 'string'}}, ['id'])]
+
+
+def expand_country_targets(items, refs):
+    """Resolve selectors locally, keeping all other dimensions intact."""
+    if not isinstance(items, list) or not 0 < len(items) <= 10000:
+        raise ValidationError('Provide between 1 and 10,000 entries or changes.')
+    expanded, scopes = [], []
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get('targets', []), list):
+            raise ValidationError('Ordered target lists are required.')
+        targets = item.get('targets', [])
+        if not targets or not isinstance(targets[0], dict):
+            expanded.append(item)
+            continue
+        if refs.dimensions(item.get('parameter'))[0] != 1:
+            raise ValidationError('Country groups require a first country dimension.')
+        selector = targets[0]
+        if set(selector) == {'country_group'}:
+            group = refs.country_groups.get(str(selector['country_group']))
+            if not group or group['invalid_members'] or not group['countries']:
+                raise ValidationError('Preset group is missing, empty, or has invalid IFs members.')
+            scope = {'kind': 'IFs preset', 'id': group['id'], 'name': group['name'],
+                     'countries': group['countries']}
+        elif set(selector) == {'countries', 'label'}:
+            countries, label = selector['countries'], selector['label']
+            if (not isinstance(countries, list) or not countries or
+                    any(not isinstance(c, str) or c not in refs.countries for c in countries) or
+                    len(set(countries)) != len(countries) or not isinstance(label, str) or not label.strip() or len(label) > 200):
+                raise ValidationError('Custom country lists require unique, exact installed IFs countries and a label.')
+            scope = {'kind': 'Custom list (not an IFs preset)', 'name': label, 'countries': sorted(countries)}
+        else:
+            raise ValidationError('Use an exact preset id or an explicitly labeled custom country list.')
+        if scope not in scopes:
+            scopes.append(scope)
+        expanded.extend({**item, 'targets': [country, *targets[1:]]} for country in scope['countries'])
+        if len(expanded) > 10000:
+            raise ValidationError('Country expansion exceeds 10,000 entries.')
+    return expanded, scopes
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -135,6 +188,7 @@ class ScenarioService:
             for session in self.sessions.values():
                 session['cancelled'] = True
                 session['draft'] = None
+                session['pending'] = None
 
     def context(self):
         root = self.installation()
@@ -147,10 +201,12 @@ class ScenarioService:
             definitions = {r[0]: r[1] or '' for r in db.execute('SELECT NAME,DEFINITION FROM IFsVar') if r[0] == r[0].lower()}
         context = {'installation': str(root), 'version': metadata['version'], 'base_year': metadata['base_year']}
         # Export is blocked if installation contents or selection changed since review.
-        digest = hashlib.sha256(json.dumps([context, refs.parameters, refs.groups, sorted(refs.countries)], sort_keys=True).encode()).hexdigest()
+        digest = hashlib.sha256(json.dumps([context, refs.parameters, refs.groups, sorted(refs.countries), refs.country_groups], sort_keys=True).encode()).hexdigest()
         return refs, definitions, context, digest
 
     def chat(self, request):
+        if request.get('confirmation'):
+            return self.confirm(request)
         text = request.get('message', '')
         if not isinstance(text, str) or not text.strip() or len(text) > 16000:
             raise ValidationError('Enter a scenario message shorter than 16,000 characters.')
@@ -190,6 +246,7 @@ class ScenarioService:
             session['busy'] = True
             session['cancelled'] = False
             session['draft'] = None  # New input always invalidates the old review/export token.
+            session['pending'] = None
         try:
             source = session['source']
             source_summary = None if source is None else {'filename': source.source, 'rows': [
@@ -229,6 +286,19 @@ class ScenarioService:
                             result = {'parameter': parameter, 'definition': definitions.get(parameter), 'dimensions': flags,
                                       'groups': {f: refs.groups.get(f, {}) for axis, f in enumerate(flags) if f > 1 or (axis > 0 and f == 1)},
                                       'countries': sorted(refs.countries) if flags[0] == 1 else []}
+                        elif name == 'search_country_groups':
+                            terms = str(args['query']).casefold().split()
+                            found = [g for g in refs.country_groups.values() if all(
+                                t in (g['name']+' '+g['long_name']+' '+g['alias']).casefold() for t in terms)]
+                            result = {'matches': [{k: g[k] for k in ('id', 'name', 'long_name', 'alias')} |
+                                      {'country_count': len(g['countries']), 'usable': bool(g['countries']) and not g['invalid_members']}
+                                      for g in found[:50]], 'total': len(found),
+                                      'available': bool(refs.country_groups)}
+                        elif name == 'country_group_details':
+                            group = refs.country_groups.get(str(args['id']))
+                            if not group:
+                                raise ValidationError('Unknown installed IFs country group id.')
+                            result = group
                         elif name == 'source_notes':
                             if source is None:
                                 raise ValidationError('No source scenario attached.')
@@ -264,15 +334,43 @@ class ScenarioService:
                 if session.get('cancelled'):
                     raise ValidationError('Scenario request stopped.')
                 session['history'].extend([{'role': 'user', 'content': text}, {'role': 'assistant', 'content': content}])
-                session['draft'] = draft
-            return {'session': identity, 'reply': reply['reply'], 'draft': None if draft is None else draft['review'], 'context': context}
+                session['pending'] = draft
+            return {'session': identity, 'reply': reply['reply'], 'draft': None,
+                    'confirmation': None if draft is None else self.confirmation_summary(draft), 'context': context}
         finally:
             with self.lock:
                 session['busy'] = False
 
+    @staticmethod
+    def confirmation_summary(draft):
+        review = draft['review']
+        return {'id': review['id'], 'purpose': review['purpose'],
+                'regeneration_prompt': review['regeneration_prompt'], 'geographies': review['geographies'],
+                'parameters': sorted(review['dimensions']), 'trajectories': len(review['rows'])}
+
+    def confirm(self, request):
+        with self.lock:
+            session = self.sessions.get(request.get('session'))
+            pending = session.get('pending') if session else None
+            if not pending or session['busy'] or session.get('cancelled') or not secrets.compare_digest(
+                    str(request.get('confirmation')), pending['review']['id']):
+                raise ValidationError('This confirmation expired. Review the latest proposal.')
+            _, _, context, digest = self.context()
+            if digest != session['digest']:
+                raise ValidationError('IFs installation changed. Start a new chat and review again.')
+            session['draft'], session['pending'] = pending, None
+            reply = 'Confirmed. Your validated working draft is ready to inspect and save.'
+            session['history'].extend([{'role': 'user', 'content': 'Confirm the proposed scenario.'},
+                {'role': 'assistant', 'content': json.dumps({'reply': reply, 'proposal': None})}])
+            return {'session': request['session'], 'reply': reply, 'draft': pending['review'],
+                    'confirmation': None, 'context': context}
+
     def prepare(self, compiler, source, proposal, context):
         if not isinstance(proposal, dict):
             raise ValidationError('A proposal must be an object.')
+        key = 'entries' if source is None else 'changes'
+        expanded, geographies = expand_country_targets(proposal.get(key), compiler.references)
+        proposal = {**proposal, key: expanded}
         if source is None:
             if 'changes' in proposal or not proposal.get('entries'):
                 raise ValidationError('A new scenario requires parameter entries.')
@@ -332,7 +430,13 @@ class ScenarioService:
                                 'before': None if before is None else before[len(prefix):], 'after': values})
         if not review_rows:
             raise ValidationError('The proposed adjustments do not change any values.')
+        covered = {c for g in geographies for c in g['countries']}
+        individual = sorted({r['targets'][0] for r in review_rows
+                             if compiler.references.dimensions(r['parameter'])[0] == 1} - covered)
+        if individual:
+            geographies.append({'kind': 'Explicit IFs countries', 'name': 'Individual targets', 'countries': individual})
         review = {'id': secrets.token_urlsafe(24), 'purpose': purpose, 'regeneration_prompt': prompt,
+                  'geographies': geographies,
                   'filename': proposal.get('filename', 'Scenario.sce'), 'rows': review_rows,
                   'dimensions': {r['parameter']: compiler.references.dimensions(r['parameter']) for r in review_rows},
                   'source': None if source is None else source.source}

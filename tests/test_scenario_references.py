@@ -56,3 +56,19 @@ class InstallationReferenceTests(unittest.TestCase):
             db.execute('DROP TABLE RegionIDNewFull')
         with self.assertRaises(ValidationError):
             References.from_installation(self.root)
+
+    def test_preset_membership_uses_country_ids_and_checks_spelling(self):
+        with closing(sqlite3.connect(self.root / 'DATA/IFs.db')) as db, db:
+            db.execute('CREATE TABLE GroupIDNewFull (GroupNum,GroupName,LongGroupName,Alias)')
+            db.execute("INSERT INTO GroupIDNewFull VALUES (42,'Example region','Example region','Alias')")
+            db.execute('CREATE TABLE GroupingFull (Region,RegionNo,GroupNo)')
+            db.execute("INSERT INTO GroupingFull VALUES ('Exact Country',7,42)")
+        group = References.from_installation(self.root).country_groups['42']
+        self.assertEqual(group['countries'], ['Exact Country'])
+        self.assertEqual(group['alias'], 'Alias')
+        self.assertEqual(group['invalid_members'], [])
+        with closing(sqlite3.connect(self.root / 'DATA/IFs.db')) as db, db:
+            db.execute("UPDATE GroupingFull SET Region='Invented Country'")
+        group = References.from_installation(self.root).country_groups['42']
+        self.assertEqual(group['countries'], [])
+        self.assertEqual(group['invalid_members'], ['Invented Country'])

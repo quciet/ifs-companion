@@ -8,7 +8,7 @@ import sqlite3
 import io
 from datetime import datetime, timezone
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -59,6 +59,7 @@ class References:
     parameters: dict
     groups: dict
     countries: set
+    country_groups: dict = field(default_factory=dict)
 
     @classmethod
     def from_installation(cls, installation):
@@ -92,9 +93,38 @@ class References:
                 raise ValidationError('Invalid or duplicate installation country indices.')
             # Country dimensions after the first use actual RegionNum indices.
             groups[1] = country_indices
-            return cls(parameters, groups, set(names))
+            country_groups = cls.load_country_groups(country_db, country_indices)
+            return cls(parameters, groups, set(names), country_groups)
         except sqlite3.Error as exc:
             raise ValidationError(f'Cannot read IFs installation references: {exc}') from exc
+
+    @staticmethod
+    def load_country_groups(database, countries):
+        """Read full-country presets; never confuse them with IFS.grp dimensions."""
+        with closing(sqlite3.connect(Path(database).as_uri() + '?mode=ro', uri=True)) as db:
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {'GroupIDNewFull', 'GroupingFull'} <= tables:
+                return {}  # Older installations may not expose preset groups.
+            result = {}
+            for identity, name, long_name, alias in db.execute(
+                    'SELECT GroupNum,GroupName,LongGroupName,Alias FROM GroupIDNewFull'):
+                key = str(integer(identity))
+                if key in result or not isinstance(name, str) or not name.strip():
+                    raise ValidationError('Invalid or duplicate IFs country group.')
+                result[key] = {'id': key, 'name': name, 'long_name': long_name or '',
+                               'alias': alias or '', 'countries': [], 'invalid_members': []}
+            for label, index, group in db.execute('SELECT Region,RegionNo,GroupNo FROM GroupingFull'):
+                item = result.get(str(integer(group)))
+                if item is None:
+                    raise ValidationError('IFs country membership refers to an unknown group.')
+                name = countries.get(integer(index))
+                if name is None or name != label:
+                    item['invalid_members'].append(str(label))
+                elif name not in item['countries']:
+                    item['countries'].append(name)
+            for item in result.values():
+                item['countries'].sort()
+            return result
 
     @classmethod
     def from_companion_settings(cls, settings):
