@@ -49,17 +49,17 @@
     {
       "id": "ifs-scenario-builder",
       "name": "Scenario Builder",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "min_companion_version": "0.3.0",
       "api_version": 1,
       "platform": "win-x64",
-      "sha256": "da186ed0caaff0e8487c922b22938ce1a2040b71df0401dc1d19647f25d8c031",
-      "size": 33837,
-      "installed_size": 104441,
+      "sha256": "df1adf563d8e786a704ffbedf3c7cfb80d3ce31378ec0f0ddb4b0adc8963fc3b",
+      "size": 34598,
+      "installed_size": 107964,
       "released_at": "2026-10-21",
-      "release_notes": "# Scenario Builder 0.3.2\n\nFixes the raw JSON parsing error (\"Expecting value: line 1 column 1\") when an AI\nprovider returns an empty answer or ordinary prose instead of the required JSON.\nThe builder now retries once with a format-only correction. It explicitly asks\nfor clarification when assumptions are missing and prohibits invented values,\nparameters or country memberships.\n\nIf the provider still returns invalid response formatting, research pauses with\n**Continue researching** and **Revise request**. The original request, attachment\nand completed metadata lookups are preserved in the current chat. Proposal\nvalidation and explicit confirmation remain mandatory.\n\nRequires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools** or install\nthe downloaded `.ifstool` package from file. Existing saved scenarios are kept.\n",
+      "release_notes": "# Scenario Builder 0.3.3\n\nFixes duplicate scenario targets caused by overlapping country selections.\nIdentical annual trajectories for the same parameter and complete dimension\ntarget merge into a single row. The confirmation reports how many identical\ndefinitions were merged.\n\nConflicting trajectories now ask the user which definition should apply instead\nof ending the conversation with a raw duplicate-target error. The original\nrequest and proposed definitions stay in the chat for clarification.\n\nIdentical edits to attached scenarios apply once. Other overlapping adjustments\nrequire clarification so multipliers are not accidentally applied twice.\nUnrelated dimension targets and disjoint time intervals remain independent.\n\nRequires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools** or install\nthe downloaded `.ifstool` package. Existing saved scenarios are kept.\n",
       "description": "Build and modify .sce scenarios in chat with IFs preset country groups, explicit confirmation, attachments and graph inspection. Optional tool.",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.3.2/ifs-scenario-builder-0.3.2-win-x64.ifstool"
+      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.3.3/ifs-scenario-builder-0.3.3-win-x64.ifstool"
     }
   ]
 }
