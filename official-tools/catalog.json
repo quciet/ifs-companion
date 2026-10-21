@@ -49,17 +49,17 @@
     {
       "id": "ifs-scenario-builder",
       "name": "Scenario Builder",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "min_companion_version": "0.3.0",
       "api_version": 1,
       "platform": "win-x64",
-      "sha256": "ae1e9df6b3d5360c3ca06bb59985827d92b1af1e18e09c03b51f21fdc3ca23a4",
-      "size": 27312,
-      "installed_size": 79103,
-      "released_at": "2026-10-20",
-      "release_notes": "Uses Companion\u2019s shared Python runtime and libraries. Missing libraries download on first installation.",
-      "description": "Optional AI-assisted .sce creation and editing with attachments, graph inspection and descriptive comments. Install separately; not included with Companion.",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.2.0/ifs-scenario-builder-0.2.0-win-x64.ifstool"
+      "sha256": "53d93c8a1844e539bcd8e478e243d345b5e3dea0e64bc8a5d1e765617de16c09",
+      "size": 32328,
+      "installed_size": 97705,
+      "released_at": "2026-10-21",
+      "release_notes": "# Scenario Builder 0.3.0\n\nRegional scenario requests can now use preset country groups from the selected\nIFs installation. The AI searches group names and aliases and inspects membership.\nAmbiguous definitions require clarification. Preset membership expands locally;\ncustom lists are explicitly labeled and must use exact installed IFs countries.\n\nEvery proposed scenario now pauses for **Confirm and build draft** in chat.\nReview the purpose, parameter names, and expandable country membership, or describe\na revision. Preview and export stay blocked until confirmation. Saving remains\na separate action. Revisions and installation changes invalidate stale approvals.\n\nThe chat distinguishes **You** in dark blue, right-aligned bubbles from\n**Scenario Builder** in light, left-aligned cards. Both have explicit speaker labels.\n\nThe integrated composer includes a **+** attachment button, an attached-file chip,\nand a send arrow. Drag one `.sce` onto the composer or choose a file without losing\nyour typed message. Enter sends; Shift+Enter inserts a line. Sending a newly\nattached file alone requests an overview without proposed changes.\n\nRequires **IFsCompanion 0.3.0 or newer** and uses its shared Python runtime, IFs\ninstallation, and AI connection. Install or update from **Manage tools**, or\ninstall the downloaded `.ifstool` package from file. Scenario Builder remains\noptional. Existing saved scenarios are preserved.\n",
+      "description": "Build and modify .sce scenarios in chat with IFs preset country groups, explicit confirmation, attachments and graph inspection. Optional tool.",
+      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.3.0/ifs-scenario-builder-0.3.0-win-x64.ifstool"
     }
   ]
 }
