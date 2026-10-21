@@ -122,6 +122,124 @@ class ScenarioServiceTests(unittest.TestCase):
         self.assertIsNone(result['draft'])
         self.assertEqual(json.loads(self.seen[-1][1][-1]['content'])['dimensions'], [1, 0, 0])
 
+    def test_many_parameter_lookups_in_one_response(self):
+        names = ['democm', 'democpolyarchym', 'govcorruptm', 'ginidomm', 'goveffectm',
+                 'tradeexportdvadm', 'gdsm', 'migrateoutm', 'migrateinm', 'govnucwepadd']
+        self.refs.parameters.update({name: (1, 0, 0) for name in names})
+        self.replies.append({'role': 'assistant', 'content': None, 'tool_calls': [
+            {'id': str(i), 'type': 'function', 'function': {'name': 'parameter_details',
+                'arguments': json.dumps({'parameter': name})}} for i, name in enumerate(names)]})
+        self.answer({'reply': 'What years and adjustment magnitudes should these changes use?', 'proposal': None})
+        result = self.service.chat({'message': 'Create a Divided World scenario with these parameters.'})
+        self.assertIsNone(result['draft'])
+        results = [m for m in self.seen[-1][1] if m['role'] == 'tool']
+        self.assertEqual(len(results), 10)
+        self.assertTrue(all('error' not in json.loads(m['content']) for m in results))
+
+    def metadata(self, calls):
+        self.replies.append({'role': 'assistant', 'content': None, 'tool_calls': [
+            {'id': str(i), 'type': 'function', 'function': {'name': name,
+                'arguments': json.dumps(args)}} for i, (name, args) in enumerate(calls)]})
+
+    def test_large_batch_has_no_old_call_limit_and_duplicate_lookups_are_cached(self):
+        names = ['parameter'+str(i) for i in range(150)]
+        self.refs.parameters.update({name: (1, 0, 0) for name in names})
+        self.metadata([('parameter_details', {'parameter': name}) for name in names] * 2)
+        self.answer({'reply': 'Which years?', 'proposal': None})
+        with patch.object(self.service, 'lookup', wraps=self.service.lookup) as lookup:
+            result = self.service.chat({'message': 'Inspect many parameters.'})
+            self.assertEqual(lookup.call_count, 150)
+        self.assertIsNone(result['draft'])
+        tools = [m for m in self.seen[-1][1] if m['role'] == 'tool']
+        self.assertEqual(len(tools), 300)
+        self.assertFalse(any('error' in json.loads(m['content']) for m in tools))
+
+    def repeated_pause(self):
+        for _ in range(4): self.metadata([('parameter_details', {'parameter': 'ylm'})])
+        return self.service.chat({'message': 'Double baseline yield for Iraq by 2100.'})
+
+    def test_repeated_cycles_pause_then_continue_preserves_progress(self):
+        with patch.object(self.service, 'lookup', wraps=self.service.lookup) as lookup:
+            paused = self.repeated_pause()
+            self.assertEqual(lookup.call_count, 1)
+        self.assertEqual(paused['research']['reason'], 'repeated')
+        self.assertEqual(paused['research']['cache_hits'], 3)
+        self.assertIsNone(paused['draft'])
+        self.assertFalse((self.root/'scenarios').exists())
+        self.answer(proposal())
+        request = {'session': paused['session'], 'continue_research': paused['research']['id']}
+        result = self.service.chat(request)
+        self.assertIsNotNone(result['confirmation'])
+        messages = self.seen[-1][1]
+        self.assertTrue(any('Double baseline yield' in (m.get('content') or '') for m in messages))
+        self.assertEqual(sum(m['role'] == 'tool' for m in messages), 4)
+        with self.assertRaises(ValidationError): self.service.chat(request)
+
+    def test_round_checkpoint_is_resumable_and_can_be_revised(self):
+        for query in ('yield', 'agriculture'): self.metadata([('search_parameters', {'query': query})])
+        with patch('scenario_service.MAX_METADATA_ROUNDS', 2):
+            paused = self.service.chat({'message': 'Research yield changes.'})
+        self.assertEqual(paused['research']['reason'], 'rounds')
+        self.answer({'reply': 'Which years should I use?', 'proposal': None})
+        self.service.chat({'session': paused['session'], 'message': 'Use 2100 and only Iraq.'})
+        messages = self.seen[-1][1]
+        self.assertTrue(any(m.get('content') == 'Research yield changes.' for m in messages))
+        self.assertEqual(messages[-1]['content'], 'Use 2100 and only Iraq.')
+        self.assertEqual(sum(m['role'] == 'tool' for m in messages), 2)
+        with self.assertRaises(ValidationError):
+            self.service.chat({'session': paused['session'], 'continue_research': paused['research']['id']})
+
+    def test_provider_failure_and_stop_keep_research(self):
+        self.metadata([('parameter_details', {'parameter': 'ylm'})])
+        original = self.service.requester
+        count = 0
+        def failing(settings, messages):
+            nonlocal count
+            count += 1
+            if count == 2: raise ValidationError('AI request timed out.')
+            return original(settings, messages)
+        self.service.requester = failing
+        paused = self.service.chat({'message': 'Inspect Iraq yield.'})
+        self.assertEqual(paused['research']['reason'], 'provider')
+        self.assertEqual(paused['research']['lookups'], 1)
+        def stopping(settings, messages):
+            self.service.cancel()
+            return {'role': 'assistant', 'content': json.dumps(proposal())}
+        self.service.requester = stopping
+        stopped = self.service.chat({'session': paused['session'], 'continue_research': paused['research']['id']})
+        self.assertEqual(stopped['research']['reason'], 'stopped')
+        self.service.requester = original
+        self.answer(proposal())
+        resumed = self.service.chat({'session': stopped['session'], 'continue_research': stopped['research']['id']})
+        self.assertIsNotNone(resumed['confirmation'])
+        self.assertTrue(any(m['role'] == 'tool' for m in self.seen[-1][1]))
+
+    def test_changed_installation_blocks_research_resume(self):
+        paused = self.repeated_pause()
+        with patch.object(self.service, 'context', return_value=(self.refs, {}, self.context, 'changed')):
+            with self.assertRaises(ValidationError):
+                self.service.chat({'session': paused['session'], 'continue_research': paused['research']['id']})
+
+    def test_attachment_and_lookup_results_survive_pause(self):
+        for _ in range(4): self.metadata([('source_rows', {'parameter': 'ylm'})])
+        source = {'name': 'Original.sce', 'text': 'CUSTOM,ylm,Iraq,1,1,1\n'}
+        paused = self.service.chat({'message': 'Inspect this attachment.', 'source': source})
+        self.answer({'reply': 'The original values are unchanged. Which adjustment do you want?', 'proposal': None})
+        result = self.service.chat({'session': paused['session'], 'continue_research': paused['research']['id']})
+        self.assertIsNone(result['draft'])
+        rows = [json.loads(m['content'])['rows'] for m in self.seen[-1][1] if m['role'] == 'tool']
+        self.assertEqual(rows[0], [['CUSTOM', 'ylm', 'Iraq', '1', '1', '1']])
+        self.assertEqual(self.service.sessions[result['session']]['source'].source, 'Original.sce')
+
+    def test_context_compaction_preserves_full_local_transcript(self):
+        messages = [{'role': 'system', 'content': 'Instructions'}, {'role': 'user', 'content': 'Inspect the scenario.'},
+                    {'role': 'assistant', 'content': None, 'tool_calls': [{'id': 'huge'}]},
+                    {'role': 'tool', 'tool_call_id': 'huge', 'content': 'x'*300001}]
+        compact = self.service.compact_metadata(messages)
+        self.assertLess(len(json.dumps(compact)), 240000)
+        self.assertEqual(len(messages[-1]['content']), 300001)
+        self.assertIn('Inspect the scenario.', json.dumps(compact))
+
     def test_inspector_metadata_and_file_preview_do_not_export(self):
         plan = proposal()
         plan['proposal']['entries'].append({'parameter': 'globalp', 'targets': [], 'values': [1, 1.2, 1.4]})

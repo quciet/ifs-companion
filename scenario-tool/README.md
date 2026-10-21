@@ -1,7 +1,7 @@
-# Scenario Builder 0.3.0
+# Scenario Builder 0.3.1
 
 Scenario Builder is an optional IFsCompanion tool, distributed separately as
-`ifs-scenario-builder-0.3.0-win-x64.ifstool`. Companion 0.3.0 or newer is required.
+`ifs-scenario-builder-0.3.1-win-x64.ifstool`. Companion 0.3.0 or newer is required.
 Model Vetting is the only tool included by default in Companion.
 
 In Companion, open Settings > Manage tools and install Scenario Builder from the
@@ -48,5 +48,16 @@ AI provider. File parsing, validation and export run locally. Stop cancels the
 pending proposal after the current provider call returns (up to its timeout).
 
 To build from the repository, run the packaging Python with
-`scenario-tool/build_tool.py --version 0.3.0`. The package uses Companion's shared
+`scenario-tool/build_tool.py --version 0.3.1`. The package uses Companion's shared
 Python runtime; users do not need a separate Python installation.
+
+Research supports large local metadata batches without a parameter lookup count
+cap. Identical lookups are cached within the chat. Repeated cycles without new
+metadata, the AI round-trip checkpoint, and connection interruptions pause with
+**Continue researching** and **Revise request** actions. Both preserve the original
+request, attached source, and lookup results. **Stop** pauses research after the
+current provider call returns. Old metadata exchanges can be omitted from the
+provider context to keep it bounded; the full transcript and results remain local
+and are available through the metadata tools. Progress is in memory for the current
+chat and does not survive restarting the tool. Parameter/country validation and
+explicit confirmation before preview/export remain mandatory.

@@ -1,24 +1,18 @@
-# Scenario Builder 0.3.0
+# Scenario Builder 0.3.1
 
-Regional scenario requests can now use preset country groups from the selected
-IFs installation. The AI searches group names and aliases and inspects membership.
-Ambiguous definitions require clarification. Preset membership expands locally;
-custom lists are explicitly labeled and must use exact installed IFs countries.
+Fixes metadata-limit failures on scenarios with many parameters. Valid local
+lookup batches no longer have an arbitrary operation count cap. Identical
+lookups reuse cached results instead of rereading the metadata.
 
-Every proposed scenario now pauses for **Confirm and build draft** in chat.
-Review the purpose, parameter names, and expandable country membership, or describe
-a revision. Preview and export stay blocked until confirmation. Saving remains
-a separate action. Revisions and installation changes invalidate stale approvals.
+Repeated lookup cycles, the AI round-trip checkpoint, and provider interruptions
+now pause research with **Continue researching** and **Revise request** actions.
+The original request, attachment, and metadata results are preserved in the
+current chat. A visible **Stop** action pauses after the current AI call returns;
+Companion's Stop action also preserves progress.
 
-The chat distinguishes **You** in dark blue, right-aligned bubbles from
-**Scenario Builder** in light, left-aligned cards. Both have explicit speaker labels.
+Provider context is bounded without discarding the full local research history.
+Country and parameter validation, stale-installation checks, and explicit
+confirmation before creating a working draft remain in place.
 
-The integrated composer includes a **+** attachment button, an attached-file chip,
-and a send arrow. Drag one `.sce` onto the composer or choose a file without losing
-your typed message. Enter sends; Shift+Enter inserts a line. Sending a newly
-attached file alone requests an overview without proposed changes.
-
-Requires **IFsCompanion 0.3.0 or newer** and uses its shared Python runtime, IFs
-installation, and AI connection. Install or update from **Manage tools**, or
-install the downloaded `.ifstool` package from file. Scenario Builder remains
-optional. Existing saved scenarios are preserved.
+Requires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools**, or install
+the downloaded `.ifstool` package from file. Existing saved scenarios are kept.

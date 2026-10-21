@@ -1,10 +1,10 @@
 'use strict';
 (()=>{
-  let session=null,source=null,draft=null,busy=false,selectedRow=null,pending=null;
+  let session=null,source=null,draft=null,busy=false,selectedRow=null,pending=null,research=null;
   const el=id=>document.getElementById(id);
   const controls=['scenarioSend','scenarioAttach','scenarioReplace','scenarioRemove','scenarioNew','scenarioSave','scenarioViewFile'];
   function updateComposer(){el('scenarioSend').disabled=busy||(!el('scenarioPrompt').value.trim()&&!(source&&!session));el('scenarioSend').setAttribute('aria-label',busy?'Waiting for response':'Send message');el('scenarioSend').title=busy?'Waiting for response':'Send message';el('scenarioComposer').classList.toggle('is-busy',busy);el('scenarioComposer').setAttribute('aria-busy',String(busy));}
-  function setBusy(value){busy=value;for(const id of controls)el(id).disabled=value;updateComposer();}
+  function setBusy(value){busy=value;for(const id of controls)el(id).disabled=value;el('scenarioStop').hidden=!value;updateComposer();}
   function sizePrompt(){const input=el('scenarioPrompt');input.style.height='auto';input.style.height=Math.min(200,Math.max(64,input.scrollHeight))+'px';updateComposer();}
   function note(text,error=false){el('scenarioStatus').textContent=text;el('scenarioStatus').classList.toggle('scenario-error',error);}
   function message(text,role,label=role==='user'?'You':'Scenario Builder'){
@@ -13,7 +13,7 @@
     const body=document.createElement('div');body.className='scenario-message-body';body.textContent=text;
     div.append(speaker,body);el('scenarioMessages').append(div);div.scrollIntoView({block:'nearest'});return div;
   }
-  function resetDraft(){draft=null;pending=null;for(const button of document.querySelectorAll('.scenario-confirm-button'))button.disabled=true;selectedRow=null;el('scenarioSummary').hidden=true;el('scenarioExportResult').replaceChildren();el('scenarioInspector').close();el('scenarioFileDialog').close();el('scenarioFileText').textContent='';}
+  function resetDraft(){draft=null;pending=null;research=null;for(const button of document.querySelectorAll('.scenario-confirm-button,.scenario-continue-button'))button.disabled=true;selectedRow=null;el('scenarioSummary').hidden=true;el('scenarioExportResult').replaceChildren();el('scenarioInspector').close();el('scenarioFileDialog').close();el('scenarioFileText').textContent='';}
   function reset(preservePrompt=false){session=null;resetDraft();el('scenarioMessages').replaceChildren();if(!preservePrompt)el('scenarioPrompt').value='';message(source?'Scenario attached. Ask me to inspect it, explain its assumptions, or propose changes.':'Describe a new scenario, or attach a .sce file to inspect or modify.','assistant');note('');sizePrompt();}
   function sourceChip(){el('scenarioSource').hidden=!source;el('scenarioSourceName').textContent=source?.name||'';}
   el('scenarioAttach').onclick=el('scenarioReplace').onclick=()=>el('scenarioFile').click();
@@ -51,6 +51,13 @@
     session=result.session;message(result.reply,'assistant');renderDraft(result.draft);updateComposer();
     el('scenarioContext').textContent=result.context.version+' · Base year '+result.context.base_year+' · '+result.context.installation;
     pending=result.confirmation||null;
+    research=result.research||null;
+    if(research){
+      const value=research,card=message(value.lookups+' metadata results preserved · '+value.cache_hits+' repeated lookups served from cache.','assistant','Scenario Builder · Research paused');
+      const resume=document.createElement('button');resume.type='button';resume.className='scenario-continue-button';resume.textContent='Continue researching';
+      resume.onclick=async()=>{if(busy||research?.id!==value.id)return;setBusy(true);resume.disabled=true;note('Continuing with preserved research…');try{receive(await api('/api/scenario/chat',{session,continue_research:value.id}));}catch(error){note(error.message,true);resume.disabled=false;}finally{setBusy(false);}};
+      const revise=document.createElement('button');revise.type='button';revise.textContent='Revise request';revise.onclick=()=>el('scenarioPrompt').focus();card.append(resume,revise);
+    }
     if(pending){
       const value=pending,card=message('','assistant','Scenario Builder · Confirmation');
       const summary=document.createElement('p');summary.textContent='Confirm scenario: '+value.purpose+'\nParameters: '+value.parameters.join(', ')+' · '+value.trajectories+' trajectories';card.append(summary);
@@ -60,7 +67,7 @@
       approve.onclick=async()=>{if(busy||pending?.id!==value.id)return;setBusy(true);approve.disabled=true;note('Building confirmed draft…');try{const result=await api('/api/scenario/chat',{session,confirmation:value.id});receive(result);}catch(error){note(error.message,true);approve.disabled=false;}finally{setBusy(false);}};
       const revise=document.createElement('button');revise.type='button';revise.textContent='Revise in chat';revise.onclick=()=>el('scenarioPrompt').focus();card.append(approve,revise);el('scenarioMessages').append(card);card.scrollIntoView({block:'nearest'});
     }
-    note(pending?'Review the scope and country membership, then confirm or describe a revision.':result.draft?'Confirmed draft ready to inspect. Saving is a separate step.':'');
+    note(research?'Research is paused. Continue or send a revised request; your progress is kept.':pending?'Review the scope and country membership, then confirm or describe a revision.':result.draft?'Confirmed draft ready to inspect. Saving is a separate step.':'');
   }
   function options(select,items){select.replaceChildren();for(const [value,label] of items){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}}
   function selectParameter(){if(!draft)return;const name=el('scenarioParameter').value,rows=draft.rows.filter(r=>r.parameter===name),flags=draft.dimensions[name];
@@ -119,6 +126,8 @@
     catch(error){if(!el('scenarioPrompt').value)el('scenarioPrompt').value=typed;sizePrompt();note(error.message,true);}finally{setBusy(false);el('scenarioPrompt').focus();}
   };
   el('scenarioSave').onclick=async()=>{if(busy||!draft)return;const filename=el('scenarioFilename').value.trim();setBusy(true);note('Saving reviewed scenario…');try{const result=await api('/api/scenario/export',{session,draft:draft.id,filename});const parent=el('scenarioExportResult');parent.replaceChildren();const text=document.createElement('p');text.textContent='Saved: '+result.path;const link=document.createElement('a');link.href=result.download;link.download=result.filename;link.textContent='Download .sce';parent.append(text,link);note('Saved with descriptive comments. Existing files were not overwritten.');}catch(error){note(error.message,true);}finally{setBusy(false);}};
-  window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;sizePrompt();el('scenarioPrompt').focus();},stopReset(){reset(true);}};
+  async function stopResearch(){note('Stopping after the current AI call returns…');try{await api('/bridge/stop',{});}catch(error){note(error.message,true);}}
+  el('scenarioStop').onclick=stopResearch;
+  window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;sizePrompt();el('scenarioPrompt').focus();},stop:stopResearch};
   reset();
 })();
