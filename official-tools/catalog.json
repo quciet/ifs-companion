@@ -49,17 +49,17 @@
     {
       "id": "ifs-scenario-builder",
       "name": "Scenario Builder",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "min_companion_version": "0.3.0",
       "api_version": 1,
       "platform": "win-x64",
-      "sha256": "bd4329014c3454f6a37cf1d64bdff000ac358495b191a48ba3f58c7bb5095af1",
-      "size": 33508,
-      "installed_size": 103235,
+      "sha256": "da186ed0caaff0e8487c922b22938ce1a2040b71df0401dc1d19647f25d8c031",
+      "size": 33837,
+      "installed_size": 104441,
       "released_at": "2026-10-21",
-      "release_notes": "# Scenario Builder 0.3.1\n\nFixes metadata-limit failures on scenarios with many parameters. Valid local\nlookup batches no longer have an arbitrary operation count cap. Identical\nlookups reuse cached results instead of rereading the metadata.\n\nRepeated lookup cycles, the AI round-trip checkpoint, and provider interruptions\nnow pause research with **Continue researching** and **Revise request** actions.\nThe original request, attachment, and metadata results are preserved in the\ncurrent chat. A visible **Stop** action pauses after the current AI call returns;\nCompanion's Stop action also preserves progress.\n\nProvider context is bounded without discarding the full local research history.\nCountry and parameter validation, stale-installation checks, and explicit\nconfirmation before creating a working draft remain in place.\n\nRequires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools**, or install\nthe downloaded `.ifstool` package from file. Existing saved scenarios are kept.\n",
+      "release_notes": "# Scenario Builder 0.3.2\n\nFixes the raw JSON parsing error (\"Expecting value: line 1 column 1\") when an AI\nprovider returns an empty answer or ordinary prose instead of the required JSON.\nThe builder now retries once with a format-only correction. It explicitly asks\nfor clarification when assumptions are missing and prohibits invented values,\nparameters or country memberships.\n\nIf the provider still returns invalid response formatting, research pauses with\n**Continue researching** and **Revise request**. The original request, attachment\nand completed metadata lookups are preserved in the current chat. Proposal\nvalidation and explicit confirmation remain mandatory.\n\nRequires **IFsCompanion 0.3.0 or newer**. Update from **Manage tools** or install\nthe downloaded `.ifstool` package from file. Existing saved scenarios are kept.\n",
       "description": "Build and modify .sce scenarios in chat with IFs preset country groups, explicit confirmation, attachments and graph inspection. Optional tool.",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.3.1/ifs-scenario-builder-0.3.1-win-x64.ifstool"
+      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.3.2/ifs-scenario-builder-0.3.2-win-x64.ifstool"
     }
   ]
 }
