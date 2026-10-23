@@ -662,14 +662,14 @@ class Handler(app.Handler):
                 owner=request.get('id');service.read(owner)
                 job=self.jobs().create('chat',owner,{'stage':'responding'})
                 try:
-                    result=service.send(owner,request.get('message'),source=request.get('source'))
+                    result=service.send(owner,request.get('message'),source=request.get('source'),continue_research=request.get('continue_research'))
                     cancelled=bool(result['messages'] and result['messages'][-1]['content']=='Stopped.')
                     self.jobs().update(job['id'],'cancelled' if cancelled else 'complete',stage='finished')
                     return self.send(result)
                 except Exception as error:
                     self.jobs().update(job['id'],'failed',error=str(error));raise
             except (ValueError, OSError) as error: return self.send({'error':str(error)}, status=400)
-        if self.path in ('/api/app-update/check','/api/app-update/download','/api/app-update/install'):
+        if self.path in ('/api/app-update/check','/api/app-update/download','/api/app-update/install','/api/app-update/complete'):
             try:
                 self.tool_access(mutate=True)
                 size=int(self.headers.get('Content-Length',0))
@@ -677,6 +677,7 @@ class Handler(app.Handler):
                 request=json.loads(self.rfile.read(size))
                 if not isinstance(request,dict): raise ValueError('Invalid update request.')
                 updater=self.updater()
+                if self.path.endswith('/complete'): return self.send(updater.complete_startup())
                 if self.path.endswith('/check'): return self.send(updater.check())
                 if self.path.endswith('/download'): return self.send(updater.download(request.get('kind')))
                 self.reconcile_jobs()

@@ -128,3 +128,23 @@ Companion and the new official tool packages use one private Python runtime. Opt
 The obsolete separate engine and Scenario Builder output copies and their PyInstaller work directories were removed during cleanup. The obsolete Scenario Builder standalone recipe has been retired. Build tools, shared-runtime development environments, test evidence, and saved user data are kept separately and should not be removed solely because they are old.
 
 Temporary-file policy: builds now remove their own package staging in a finally block, including after failure. Test runs must use disposable per-run directories and clean up runtime/tool copies and browser caches after stopping their own processes. Keep concise diagnostic reports, not full extracted environments. Saved work and reusable development dependencies are excluded; see AGENTS.md.
+
+
+### Cleanup after an app update
+
+After the packaged desktop successfully loads, Companion verifies the installed
+files against `app-files.json` before cleaning up. It removes old program files
+only when the last successful installation recorded them and their checksums are
+unchanged. Unknown files, modified files, settings, and the selected storage folder
+are preserved. Locked files are retried on the next successful launch. This works
+for both installer updates and portable/dist overlays.
+
+Completed installer/ZIP downloads and recognized interrupted downloads under the
+active storage folder's `updates/<version>/` are removed for the running version
+and older versions. Newer downloads and unrelated files are retained. Manually
+saved installers outside that managed folder are not deleted.
+
+The first manifest-enabled launch establishes a baseline: old files from versions
+that did not record ownership cannot be safely identified and are left intact.
+Failed launches or incomplete/modified installations do not trigger cleanup.
+The normal build generates the manifest; source checkouts do not run cleanup.

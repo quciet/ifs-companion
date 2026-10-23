@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from app_updates import AppUpdates, select_release
 
 
@@ -65,6 +66,18 @@ class AppUpdateTests(unittest.TestCase):
         def offline(url):raise OSError('offline')
         self.updater.opener=offline;self.updater.check();self.assertEqual(self.wait()['status'],'error')
         self.assertIsNone(self.updater.progress()['release'])
+
+    def test_startup_cleanup_requires_packaged_idle_host(self):
+        with patch('update_cleanup.cleanup',return_value={'removed':1}) as clean:
+            self.updater.mode='source'
+            self.assertTrue(self.updater.complete_startup()['skipped'])
+            self.updater.mode='installer'
+            self.updater.state['status']='downloading'
+            self.assertTrue(self.updater.complete_startup()['skipped'])
+            clean.assert_not_called()
+            self.updater.state['status']='idle'
+            self.assertEqual(self.updater.complete_startup()['removed'],1)
+            clean.assert_called_once_with(self.app,self.root/'data','0.2.2')
 
     def test_current_version_is_not_downgraded(self):
         self.updater.current=(1,0,0);self.updater.check();self.assertEqual(self.wait()['status'],'up_to_date')

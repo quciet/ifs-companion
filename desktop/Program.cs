@@ -82,6 +82,15 @@ sealed class CompanionWindow : Form
             };
             view.CoreWebView2.NavigationCompleted += async (_, e) => {
                 loading.Visible = false;
+                if (e.IsSuccess) {
+                    try {
+                        using var cleanupClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+                        var cleanupToken = await view.CoreWebView2.ExecuteScriptAsync("document.querySelector('meta[name=companion-token]').content");
+                        cleanupClient.DefaultRequestHeaders.Add("X-Companion-Token", JsonSerializer.Deserialize<string>(cleanupToken));
+                        using var cleanupResponse = await cleanupClient.PostAsync(origin + "/api/app-update/complete", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+                        if (!cleanupResponse.IsSuccessStatusCode) System.Diagnostics.Debug.WriteLine("Update cleanup deferred: " + await cleanupResponse.Content.ReadAsStringAsync());
+                    } catch (Exception error) { System.Diagnostics.Debug.WriteLine("Update cleanup deferred: " + error.Message); }
+                }
                 if (smokeOutput != null)
                 {
                     try {

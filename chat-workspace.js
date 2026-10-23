@@ -157,6 +157,18 @@
       if(link.kind==='scenario'){if(link===latest)inlineScenario(element,link,chat.id);}
       else action(element,link.title,()=>open(link));
     }}
+    if(chat.research){
+      const card=document.createElement('div');card.className='researchCheckpoint';
+      const proceed=document.createElement('button');proceed.type='button';proceed.textContent='Continue researching';proceed.disabled=!!chat.busy;
+      proceed.onclick=async()=>{
+        const owner=chat.id;if(busy.has(owner))return;busy.add(owner);updateBusy();proceed.disabled=true;status(null);
+        try{const result=await api('/api/chats/send',{id:owner,continue_research:chat.research.id});if(current===owner)render({...result,busy:false});}
+        catch(error){status(error);}
+        finally{busy.delete(owner);updateBusy();if(current===owner)render(await api('/api/chats?id='+owner));await refresh();}
+      };
+      const revise=document.createElement('button');revise.type='button';revise.textContent='Revise request';revise.onclick=()=>$('prompt').focus();
+      card.append(proceed,revise);$('messages').append(card);
+    }
     if(chat.busy)busy.add(chat.id);else busy.delete(chat.id);updateBusy();
   }
   async function inlineScenario(host,link,owner){

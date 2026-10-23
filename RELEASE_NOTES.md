@@ -1,3 +1,13 @@
+# IFsCompanion 0.3.6
+
+- Removes the main chat's fixed research-round cutoff. Productive research continues until an answer, a validated scenario response, or Stop.
+- Detects repeated lookups and repeated results without new information. Reuses cached lookups and offers Continue researching or Revise request with the original request, tool results and links saved.
+- Saves completed tool exchanges to local storage; interrupted research can resume after restarting Companion. Connection errors and Stop retain completed work. Continuing never approves a scenario or executes a model run.
+- Returns validated Scenario Builder replies directly, avoiding a second AI interpretation and unnecessary tool loops. Update optional Scenario Builder to 0.4.3 to remove its separate metadata-round cutoff too.
+- Includes the post-update cleanup improvements: a verified application manifest, cleanup after successful desktop startup, and conservative removal of obsolete owned files and managed update downloads. Unknown files, modified files, settings and selected storage are preserved; locked files are retried. Source checkouts skip cleanup.
+
+Model Vetting remains the only bundled tool. Existing chats, tool data and saved scenarios are preserved. Provider limits and actual context-size constraints still apply and pause research with progress retained.
+
 # IFsCompanion 0.3.5
 
 - Scenario Builder proposals, confirmation and draft controls appear inline in the main conversation instead of opening a separate scenario interface.

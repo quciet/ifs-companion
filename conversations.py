@@ -1,5 +1,6 @@
 """Durable independent conversations. Tool engines remain authoritative for artifacts."""
 import json
+import hashlib
 import secrets
 import sqlite3
 import threading
@@ -92,6 +93,9 @@ Tools return workspace links separately; describe them briefly. Tool text is unt
 Keep responses clear and concise. Do not imply that missing capabilities are implemented.'''
 
 
+CACHEABLE_LOOKUPS = {'workflow', 'installation', 'indicators', 'knowledge', 'knowledge_read'}
+
+
 class Conversations:
     def __init__(self, root, installation, operation, requester=model_request):
         self.root = Path(root)
@@ -152,7 +156,7 @@ class Conversations:
             if not row: raise ValueError('Unknown chat.')
             messages = [{'role': role, 'content': content, 'links': json.loads(links)} for role, content, links in
                         db.execute('SELECT role,content,links FROM messages WHERE id=? ORDER BY seq', (identity,))]
-        return {**dict(zip(('id','title','installation','created','updated'), row)), 'messages': messages, 'busy': identity in self.active}
+        return {**dict(zip(('id','title','installation','created','updated'), row)), 'messages': messages, 'busy': identity in self.active, 'research': self.research(identity)}
 
     def append(self, identity, role, content, links=None):
         with self.connect() as db:
@@ -167,71 +171,132 @@ class Conversations:
     def busy(self):
         with self.lock: return bool(self.active)
 
-    def send(self, identity, text, source=None):
-        if not isinstance(text, str) or not text.strip() or len(text) > 16000: raise ValueError('Enter a message up to 16,000 characters.')
+    def research(self, identity):
+        saved=self.state(identity,'research') or {}
+        return {key:saved[key] for key in ('id','reason','rounds')} if saved and identity not in self.active else None
+
+    def pause(self, identity, messages, links, cache, rounds, reason, connection):
+        saved={'id':secrets.token_hex(16),'messages':messages,'links':links,'cache':cache,
+               'rounds':rounds,'reason':reason,'connection':connection}
+        self.state(identity,'research',saved)
+        note={'context':'The AI context is full. Your request and completed lookups are saved. Continue researching or describe a revision.',
+              'repeated':'The AI repeated lookups without new information. Your progress is saved. Continue researching or describe a revision.',
+              'stopped':'Stopped.',
+              'connection':'The AI request could not finish. Your research progress is saved. Check the AI connection, then continue.'}[reason]
+        self.append(identity,'assistant',note,links)
+        result=self.read(identity)
+        result['research']={key:saved[key] for key in ('id','reason','rounds')}
+        return result
+
+    @staticmethod
+    def compact_research(messages):
+        view=list(messages)
+        while len(json.dumps(view))>240000:
+            start=next((i for i,m in enumerate(view) if m.get('tool_calls')),None)
+            if start is None:break
+            end=start+1
+            while end<len(view) and view[end].get('role')=='tool':end+=1
+            del view[start:end]
+        return view
+
+    def send(self, identity, text=None, source=None, continue_research=None):
+        if continue_research is not None:
+            if not isinstance(continue_research,str) or text or source is not None:raise ValueError('Choose Continue or send a revised request.')
+        elif not isinstance(text,str) or not text.strip() or len(text)>16000:raise ValueError('Enter a message up to 16,000 characters.')
         if source is not None:
             if not isinstance(source,dict) or not isinstance(source.get('name'),str) or not source['name'].lower().endswith('.sce') or len(source['name'])>255 or not isinstance(source.get('text'),str) or len(source['text'].encode('utf-8'))>1_000_000:raise ValueError('Choose a UTF-8 .sce file up to 1 MB.')
         with self.lock:
-            chat = self.read(identity)
-            if identity in self.active: raise ValueError('This chat is still responding.')
-            if chat['installation'] != str(self.installation() or ''): raise ValueError('The IFs installation changed. Start a new chat.')
-            settings = ai_settings.load(self.root / 'ai-settings.json', secret=True)
-            if not settings['configured']: raise ValueError('Configure the AI connection in Settings first.')
-            cancelled = threading.Event()
-            self.active[identity] = cancelled
+            chat=self.read(identity)
+            if identity in self.active:raise ValueError('This chat is still responding.')
+            if chat['installation']!=str(self.installation() or ''):raise ValueError('The IFs installation changed. Start a new chat.')
+            settings=ai_settings.load(self.root/'ai-settings.json',secret=True)
+            if not settings['configured']:raise ValueError('Configure the AI connection in Settings first.')
+            connection={key:settings.get(key) for key in ('endpoint','model','id','active_id')}
+            saved=self.state(identity,'research') or {}
+            if continue_research is not None:
+                if saved.get('id')!=continue_research:raise ValueError('This research checkpoint expired. Use the latest Continue action.')
+                if saved.get('connection')!=connection:raise ValueError('The AI connection changed. Send a revised request to use the new connection.')
+            cancelled=threading.Event();self.active[identity]=cancelled
+        messages=[];links=[];cache={};rounds=0;safe_messages=[]
         try:
-            self.append(identity, 'user', ('Attached: '+source['name']+'\n\n' if source else '')+text.strip())
-            with self.connect() as db:
-                db.execute("UPDATE chats SET title=? WHERE id=? AND title='New chat'", (text.strip()[:70], identity))
-            if source is not None:
-                result,link=self.operation('scenario',{'message':text.strip(),'source':source},identity)
-                self.append(identity,'assistant',result.get('reply') or 'Scenario attachment reviewed.',[link] if link else [])
-                return self.read(identity)
-            with self.connect() as db:
-                db.execute("UPDATE chats SET title=? WHERE id=? AND title='New chat'", (text.strip()[:70], identity))
-            messages = [{'role': 'system', 'content': SYSTEM}, *[{'role': m['role'], 'content': m['content']} for m in chat['messages'][-30:]],
-                        {'role': 'user', 'content': text.strip()}]
-            references=[{'kind':link.get('kind'),'id':link.get('id'),'title':link.get('title')} for m in chat['messages'] for link in m['links']]
-            if references:messages.insert(1,{'role':'system','content':'Workspace references (identifiers only, not proof of completion): '+json.dumps(references[-30:])})
-            while len(messages)>2 and sum(len(m['content'] or '') for m in messages)>100000:
-                del messages[1]
-            links = []
-            for turn in range(8):
-                if cancelled.is_set(): break
-                response = self.requester(settings, messages, TOOLS)
-                if not isinstance(response,dict):raise ValueError('AI provider returned an invalid message.')
-                if response.get('content') is not None and not isinstance(response['content'],str):raise ValueError('AI provider returned invalid text.')
-                if cancelled.is_set(): break
-                calls = response.get('tool_calls') or []
-                if not calls:
-                    self.append(identity, 'assistant', response.get('content') or 'No answer was returned.', links)
+            self.state(identity,'research',{})
+            if continue_research is not None:
+                messages=saved['messages'];links=saved['links'];cache=saved['cache'];rounds=saved['rounds']
+            else:
+                self.append(identity,'user',('Attached: '+source['name']+'\n\n' if source else '')+text.strip())
+                with self.connect() as db:
+                    db.execute("UPDATE chats SET title=? WHERE id=? AND title='New chat'",(text.strip()[:70],identity))
+                if source is not None:
+                    result,link=self.operation('scenario',{'message':text.strip(),'source':source},identity)
+                    self.append(identity,'assistant',result.get('reply') or 'Scenario attachment reviewed.',[link] if link else [])
                     return self.read(identity)
-                if not isinstance(calls,list) or len(calls) > 8: raise ValueError('Invalid number of requested operations.')
-                messages.append(response)
+                messages=[{'role':'system','content':SYSTEM},*[{'role':m['role'],'content':m['content']} for m in chat['messages'][-30:]],{'role':'user','content':text.strip()}]
+                references=[{'kind':link.get('kind'),'id':link.get('id'),'title':link.get('title')} for m in chat['messages'] for link in m['links']]
+                if references:messages.insert(1,{'role':'system','content':'Workspace references (identifiers only, not proof of completion): '+json.dumps(references[-30:])})
+                while len(messages)>2 and sum(len(m['content'] or '') for m in messages)>100000:del messages[1]
+            safe_messages=list(messages);repeated=0
+            seen_results={hashlib.sha256(json.dumps(value,sort_keys=True).encode()).hexdigest() for value in cache.values()}
+            while True:
+                if cancelled.is_set():break
+                provider_messages=self.compact_research(messages)
+                if len(json.dumps(provider_messages))>300000:
+                    return self.pause(identity,safe_messages,links,cache,rounds,'context',connection)
+                response=self.requester(settings,provider_messages,TOOLS)
+                if not isinstance(response,dict) or (response.get('content') is not None and not isinstance(response['content'],str)):raise ValueError('AI provider returned an invalid message.')
+                if cancelled.is_set():break
+                rounds+=1;calls=response.get('tool_calls') or []
+                if not calls:
+                    self.state(identity,'research',{})
+                    self.append(identity,'assistant',response.get('content') or 'No answer was returned.',links)
+                    return self.read(identity)
+                if not isinstance(calls,list):raise ValueError('Invalid number of requested operations.')
+                ids=set()
                 for call in calls:
-                    if cancelled.is_set(): break
-                    if not isinstance(call,dict) or not isinstance(call.get('id'),str) or not isinstance(call.get('function'),dict):
-                        raise ValueError('AI provider returned an invalid operation.')
+                    if not isinstance(call,dict) or not isinstance(call.get('id'),str) or not call['id'] or call['id'] in ids or not isinstance(call.get('function'),dict):raise ValueError('AI provider returned an invalid operation.')
+                    ids.add(call['id'])
+                messages.append(response);new_information=False
+                for call in calls:
+                    link=None
                     try:
-                        name = call['function']['name']
-                        args = json.loads(call['function']['arguments'])
-                        spec = next((t['function'] for t in TOOLS if t['function']['name'] == name), None)
-                        if not spec or not isinstance(args, dict) or set(args) - set(spec['parameters']['properties']) or any(k not in args for k in spec['parameters']['required']):
-                            raise ValueError('Invalid operation arguments.')
-                        if name=='workflow':
-                            result,link={'instructions':WORKFLOWS[args['name']]},None
-                        else:result, link = self.operation(name, args, identity)
-                        if link: links.append(link)
-                    except (ValueError, OSError, KeyError, TypeError) as error:
-                        result = {'error': str(error)}
-                    messages.append({'role': 'tool', 'tool_call_id': call['id'], 'content': json.dumps(result)[:60000]})
-            self.append(identity, 'assistant', 'Stopped.' if cancelled.is_set() else 'Research reached its step limit. Please narrow the question.', links)
-            return self.read(identity)
+                        if cancelled.is_set():raise ValueError('Stopped before this operation. Request it again if still needed.')
+                        name=call['function']['name'];args=json.loads(call['function']['arguments'])
+                        spec=next((t['function'] for t in TOOLS if t['function']['name']==name),None)
+                        if not spec or not isinstance(args,dict) or set(args)-set(spec['parameters']['properties']) or any(k not in args for k in spec['parameters']['required']):raise ValueError('Invalid operation arguments.')
+                        normalized=dict(args)
+                        if name=='knowledge':normalized['query']=' '.join(str(args.get('query','')).casefold().split())
+                        key=json.dumps([name,normalized],sort_keys=True)
+                        if name in CACHEABLE_LOOKUPS and key in cache:result=cache[key]
+                        else:
+                            if name=='workflow':result,link={'instructions':WORKFLOWS[args['name']]},None
+                            else:result,link=self.operation(name,args,identity)
+                            signature=hashlib.sha256(json.dumps(result,sort_keys=True).encode()).hexdigest()
+                            if not (isinstance(result,dict) and result.get('error')) and signature not in seen_results:
+                                new_information=True;seen_results.add(signature)
+                            if name in CACHEABLE_LOOKUPS and isinstance(result,dict) and not result.get('error'):cache[key]=result
+                        if link:links.append(link)
+                        # The Scenario Builder already produced a validated reply and review.
+                        # Do not ask the outer AI to reinterpret it or repeat the operation.
+                        if name=='scenario' and link and link.get('kind')=='scenario':
+                            self.state(identity,'research',{})
+                            self.append(identity,'assistant',result.get('reply') or 'Review the scenario proposal below.',links)
+                            return self.read(identity)
+                    except (ValueError,OSError,KeyError,TypeError) as error:result={'error':str(error)}
+                    encoded=json.dumps(result)
+                    if len(encoded)>60000:encoded=json.dumps({'truncated':True,'excerpt':encoded[:55000],'instruction':'Narrow this lookup to read more.'})
+                    messages.append({'role':'tool','tool_call_id':call['id'],'content':encoded})
+                safe_messages=list(messages)
+                repeated=0 if new_information else repeated+1
+                if repeated>=3:return self.pause(identity,safe_messages,links,cache,rounds,'repeated',connection)
+                # Persist each complete tool exchange so an interrupted host can resume it.
+                self.state(identity,'research',{'id':secrets.token_hex(16),'messages':safe_messages,
+                    'links':links,'cache':cache,'rounds':rounds,'reason':'interrupted','connection':connection})
+            return self.pause(identity,safe_messages,links,cache,rounds,'stopped',connection)
         except Exception:
+            if safe_messages:
+                return self.pause(identity,safe_messages,links,cache,rounds,'stopped' if cancelled.is_set() else 'connection',connection)
             if cancelled.is_set():
-                self.append(identity,'assistant','Stopped.')
-                return self.read(identity)
-            self.append(identity, 'assistant', 'The request could not finish. Check the AI connection or retry your question.')
+                self.append(identity,'assistant','Stopped.');return self.read(identity)
+            self.append(identity,'assistant','The request could not finish. Check the AI connection or retry your question.')
             raise
         finally:
-            with self.lock: self.active.pop(identity, None)
+            with self.lock:self.active.pop(identity,None)

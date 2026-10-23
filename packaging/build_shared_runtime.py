@@ -35,7 +35,7 @@ def build(destination, model):
     subprocess.run([str(python),'-I','-c','import numpy,sqlite3,tkinter,ssl; print("Shared Python core verified")'],check=True)
     engine=destination/'engine';engine.mkdir()
     for name in ('desktop_launcher.py','companion_server.py','tool_manager.py','official_tools.py','shared_python.py',
-                 'shared-python-lock.json','ai_settings.py','storage.py','app_updates.py','installation_validation.py',
+                 'shared-python-lock.json','ai_settings.py','storage.py','update_cleanup.py','app_updates.py','installation_validation.py',
                  'shell.html','shell.js','shell.css','chat-workspace.js','task_history.py','conversations.py','execution.py','agent_workflows.py','jobs.py','scenario_runner.py','job-view.html','job-view.js'):
         shutil.copy2(ROOT/name,engine/name)
     for source in model.glob('*.py'):shutil.copy2(source,engine/source.name)

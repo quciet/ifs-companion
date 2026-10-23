@@ -19,6 +19,21 @@ from jobs import Jobs
 
 
 class ChatApiTests(unittest.TestCase):
+    def test_main_chat_checkpoint_continue_routes_without_new_message(self):
+        chat=self.post('/api/chats/create',{})
+        service=self.server.conversations
+        def lookup(*args):
+            return {'role':'assistant','content':None,'tool_calls':[{'id':'lookup','type':'function','function':{'name':'knowledge','arguments':'{"query":"yield"}'}}]}
+        with patch('conversations.ai_settings.load',return_value={'configured':True}):
+            service.requester=lookup;service.operation=lambda *args:({'evidence':'saved'},None)
+            paused=self.post('/api/chats/send',{'id':chat['id'],'message':'Investigate yield'})
+            self.assertEqual(paused['research']['reason'],'repeated')
+            service.requester=lambda *args:{'role':'assistant','content':'Completed from saved evidence'}
+            result=self.post('/api/chats/send',{'id':chat['id'],'continue_research':paused['research']['id']})
+        self.assertIsNone(result['research'])
+        self.assertEqual(result['messages'][-1]['content'],'Completed from saved evidence')
+        self.assertEqual(sum(m['role']=='user' for m in result['messages']),1)
+
     def test_inline_review_requires_owned_session_and_persists_confirmed_result(self):
         chat=self.post('/api/chats/create',{})
         from conversations import Conversations

@@ -46,6 +46,8 @@ try {
     }
     New-Item -ItemType Directory -Force 'release' | Out-Null
     Copy-Item -LiteralPath 'licenses' -Destination $distribution -Recurse -Force
+    & $PythonPath -c "from update_cleanup import write_manifest; import sys; write_manifest(sys.argv[1],sys.argv[2])" $distribution $appVersion
+    if ($LASTEXITCODE -ne 0) { throw 'Application file manifest failed' }
     # A runnable dist checkout may be open. Publish from staging without touching it.
     & $InnoPath /Q "/DDistributionDir=$distribution" packaging/installer.iss
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }

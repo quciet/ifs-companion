@@ -142,6 +142,12 @@ class AppUpdates:
             raise ValueError('The downloaded update changed. Download it again.')
         return record
 
+    def complete_startup(self):
+        with self.lock:
+            if self.mode == 'source' or self.active(): return {'skipped':True}
+            from update_cleanup import cleanup
+            return cleanup(self.app_directory, self.folder.parent, '.'.join(map(str,self.current)))
+
     def prepare_install(self):
         record = self.verified_file()
         if self.mode != 'installer' or record['kind'] != 'installer':
