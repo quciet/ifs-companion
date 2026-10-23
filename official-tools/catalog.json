@@ -49,17 +49,17 @@
     {
       "id": "ifs-scenario-builder",
       "name": "Scenario Builder",
-      "version": "0.4.2",
-      "min_companion_version": "0.3.5",
+      "version": "0.4.3",
+      "min_companion_version": "0.3.6",
       "api_version": 1,
       "platform": "win-x64",
-      "sha256": "bbd9d1e34f13505874f6feed20157020a078abbd84694c0a631b87909f8cc2de",
-      "size": 47910,
-      "installed_size": 155244,
+      "sha256": "e46f16598f6615e57854e79f5ddea5f984b6aafe16578c2588decd4fd9916c8c",
+      "size": 48096,
+      "installed_size": 155880,
       "released_at": "2026-10-23",
-      "release_notes": "# Scenario Builder 0.4.2\n\n- Integrates proposal review, confirmation, inspection, file preview and export into Companion's main conversation.\n- Uses the main composer for revisions and optional .sce attachments, with no separate scenario chat destination.\n- Saves confirmation results through the owning Companion conversation so reopening a task restores the latest draft.\n- Retains installed IFs metadata validation, baseline defaults, semantic direction checks and group-aware writing.\n\nRequires **IFsCompanion 0.3.5 or newer**. Update Companion first, then update this optional tool through Manage tools. Existing saved scenarios are preserved.\n",
-      "description": "Build and modify .sce scenarios in the main Companion chat with optional attachments, inline confirmation, graphs, file preview and export. Requires Companion 0.3.5. Optional tool.",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.4.2/ifs-scenario-builder-0.4.2-win-x64.ifstool"
+      "release_notes": "# Scenario Builder 0.4.3\n\n- Removes the fixed metadata research-round cutoff. Productive lookups can continue beyond the former limit.\n- Detects repeated calls and identical results without new information, reuses cached lookups, and offers Continue or Revise with progress preserved.\n- Saves complete metadata exchanges during research so an interrupted service can restore them. Stop, provider/format failures and actual context constraints still pause with saved progress.\n- Retains main-chat review, explicit confirmation, local compiler validation, IFs baseline defaults and group-aware exports.\n\nRequires **IFsCompanion 0.3.6 or newer**. Update Companion first, then update this optional tool through Manage tools. Saved scenarios are preserved. No confirmation or model-run approval is bypassed.\n",
+      "description": "Create and modify IFs scenarios in the main chat. Productive research has no round-count cutoff; stalled lookups can continue with saved progress. Includes explicit confirmation, graphs, preview and export. Optional tool.",
+      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.4.3/ifs-scenario-builder-0.4.3-win-x64.ifstool"
     }
   ]
 }
