@@ -142,6 +142,14 @@ class Handler(app.Handler):
         try:return super().send(data,content,status)
         except (BrokenPipeError,ConnectionResetError):return None
 
+    def capture_scenario_usage(self, owner, session=None):
+        session=session or self.conversations().state(owner,'scenario-session')
+        if not session:return
+        try:
+            with self.tools().request('ifs-scenario-builder','bridge/usage?session='+session) as response:receipt=json.load(response)
+            self.conversations().record_scenario_usage(owner,{'session':session,'usage':receipt.get('usage',{})})
+        except (ValueError,OSError,KeyError,TypeError):pass  # Older optional tools lack this receipt endpoint.
+
     def prepare_run(self, request):
         owner=request.get('chat');chat=self.conversations().read(owner)
         root=app.saved_installation()
@@ -271,7 +279,9 @@ class Handler(app.Handler):
             try:
                 with self.tools().request('ifs-scenario-builder', 'api/scenario/chat', 'POST', json.dumps(body).encode()) as response:
                     result = json.load(response)
-            finally:self.conversations().state(conversation,'scenario-active',False)
+            finally:
+                self.capture_scenario_usage(conversation,session)
+                self.conversations().state(conversation,'scenario-active',False)
             self.conversations().state(conversation, 'scenario-session', result['session'])
             self.conversations().state(conversation, 'scenario-review', result)
             return result, {'kind':'scenario','id':'ifs-scenario-builder','title':'Review scenario', 'context':result}
@@ -417,6 +427,9 @@ class Handler(app.Handler):
             try:
                 self.tool_access()
                 identity = parse_qs(urlparse(self.path).query).get('id', [''])[0]
+                if identity:
+                    if self.conversations().state(identity,'scenario-active'):
+                        self.capture_scenario_usage(identity)
                 return self.send(self.conversations().read(identity) if identity else self.conversations().list())
             except (ValueError, OSError) as error: return self.send({'error':str(error)}, status=400)
         if path in ('/api/app-update', '/api/app-update/file'):
@@ -625,8 +638,10 @@ class Handler(app.Handler):
                     service.state(owner,'scenario-active',True)
                     with self.tools().request('ifs-scenario-builder','api/scenario/chat','POST',json.dumps(body).encode()) as response:result=json.load(response)
                     service.state(owner,'scenario-review',result)
+                    service.record_scenario_usage(owner,result)
                     service.append(owner,'assistant',result.get('reply') or 'Scenario review updated.',[{'kind':'scenario','id':'ifs-scenario-builder','title':'Scenario proposal','context':result}])
                 finally:
+                    self.capture_scenario_usage(owner,session)
                     service.state(owner,'scenario-active',False)
                     with service.lock:service.active.pop(owner,None)
                 return self.send(result)

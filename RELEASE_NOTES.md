@@ -1,3 +1,12 @@
+# IFsCompanion 0.3.8
+
+- Adds persistent, per-chat AI usage for Companion and Scenario Builder, including calls, reported input/output tokens, cached input, failed calls and AI request time. Missing provider usage is shown as a separate approximate character-based estimate; earlier activity is labelled untracked. Confirming or reopening a proposal does not count its usage again.
+- Updates usage during active research and keeps receipts when generation fails. Cached and reasoning tokens are subsets, not additional charged token totals. Currency costs are not guessed.
+- Integrates Scenario Builder 0.4.4's local parameter checks, compact research and repair feedback. Removes duplicated builder replies from inline reviews and keeps clarification messages in the main conversation.
+- Preserves the existing removal of arbitrary research-round cutoffs, saved-progress continuation, optional tool installation, and verified post-update cleanup. Model Vetting remains the only bundled tool.
+
+Update Companion first, then optional **Scenario Builder 0.4.4** in Manage tools. Scenario confirmation and model-run approval remain explicit.
+
 # IFsCompanion 0.3.7
 
 - Removes the main chat's fixed research-round cutoff. Productive research continues until an answer, a validated scenario response, or Stop.

@@ -7,6 +7,33 @@ from conversations import Conversations
 
 
 class ConversationTests(unittest.TestCase):
+    def test_usage_persists_and_nested_snapshots_are_not_counted_twice(self):
+        import ai_usage
+        owner=self.service.create()['id']
+        receipt=ai_usage.event({'prompt_tokens':100,'completion_tokens':10},{})
+        self.service.requester=lambda *args:{'role':'assistant','content':'Answer','_usage':receipt}
+        result=self.service.send(owner,'Question')
+        self.assertEqual(result['usage']['total']['input_tokens'],100)
+        nested={'session':'builder-session','usage':receipt}
+        self.service.record_scenario_usage(owner,nested)
+        self.service.record_scenario_usage(owner,nested)
+        restored=Conversations(self.folder.name,lambda:self.installation,self.service.operation)
+        usage=restored.read(owner)['usage']
+        self.assertEqual(usage['total']['calls'],2)
+        self.assertEqual(usage['scenario']['input_tokens'],100)
+        self.assertEqual(usage['companion']['input_tokens'],100)
+
+    def test_failed_provider_usage_is_retained_with_checkpoint(self):
+        import ai_usage
+        error=ValueError('Truncated provider response')
+        error.ai_usage=ai_usage.event({'prompt_tokens':23,'completion_tokens':8},{},failed=True)
+        def request(*args):raise error
+        self.service.requester=request
+        result=self.service.send(self.service.create()['id'],'Question')
+        self.assertEqual(result['usage']['total']['failed_calls'],1)
+        self.assertEqual(result['usage']['total']['output_tokens'],8)
+        self.assertEqual(result['research']['reason'],'connection')
+
     @staticmethod
     def lookup(index, query=None):
         return {'role':'assistant','content':None,'tool_calls':[{'id':'lookup-'+str(index),'type':'function',

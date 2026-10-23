@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
 import ai_settings
+import ai_usage
 from agent_workflows import WORKFLOWS
 
 
@@ -29,15 +30,20 @@ def model_request(settings, messages, tools):
     if settings.get('api_key'): headers['Authorization'] = 'Bearer ' + settings['api_key']
     request = Request(settings['endpoint'].rstrip('/') + '/chat/completions', headers=headers,
         data=json.dumps({'model': settings['model'], 'messages': messages, 'tools': tools, 'max_tokens': 4000}).encode())
+    started=time.monotonic()
     try:
         with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=60) as response:
             raw = response.read(2_000_001)
         if len(raw) > 2_000_000: raise ValueError('AI response was too large.')
-        choice = json.loads(raw)['choices'][0]
-        if choice.get('finish_reason') not in ('stop', 'tool_calls'): raise ValueError('AI response was incomplete.')
+        payload=json.loads(raw)
+        choice = payload['choices'][0]
+        if choice.get('finish_reason') not in ('stop','tool_calls'):
+            error=ValueError('AI response was incomplete. Completed research is preserved for continuation.')
+            error.ai_usage=ai_usage.event(payload.get('usage'),{'messages':messages,'tools':tools},choice.get('message'),time.monotonic()-started,failed=True)
+            raise error
         message = choice['message']
         if message.get('role') != 'assistant': raise ValueError('Invalid AI response.')
-        return {k: message[k] for k in ('role', 'content', 'tool_calls') if k in message}
+        return {**{k: message[k] for k in ('role', 'content', 'tool_calls') if k in message}, '_usage':ai_usage.event(payload.get('usage'),{'messages':messages,'tools':tools},message,time.monotonic()-started)}
     except HTTPError as error:
         code = error.code
         error.close()
@@ -156,7 +162,7 @@ class Conversations:
             if not row: raise ValueError('Unknown chat.')
             messages = [{'role': role, 'content': content, 'links': json.loads(links)} for role, content, links in
                         db.execute('SELECT role,content,links FROM messages WHERE id=? ORDER BY seq', (identity,))]
-        return {**dict(zip(('id','title','installation','created','updated'), row)), 'messages': messages, 'busy': identity in self.active, 'research': self.research(identity)}
+        return {**dict(zip(('id','title','installation','created','updated'), row)), 'messages': messages, 'busy': identity in self.active, 'research': self.research(identity), 'usage':self.usage(identity)}
 
     def append(self, identity, role, content, links=None):
         with self.connect() as db:
@@ -170,6 +176,24 @@ class Conversations:
 
     def busy(self):
         with self.lock: return bool(self.active)
+
+    def usage(self, identity):
+        main=self.state(identity,'ai-usage') or ai_usage.empty()
+        nested=self.state(identity,'scenario-usage') or {}
+        scenario=ai_usage.merge(*nested.values())
+        return {'total':ai_usage.merge(main,scenario),'companion':main,'scenario':scenario,
+                'earlier_activity_not_tracked':bool((self.state(identity,'usage-start') or {}).get('prior_messages'))}
+
+    def record_usage(self, identity, receipt):
+        with self.lock:
+            self.state(identity,'ai-usage',ai_usage.merge(self.state(identity,'ai-usage'),receipt))
+
+    def record_scenario_usage(self, identity, result):
+        if not isinstance(result,dict) or not result.get('session') or not isinstance(result.get('usage'),dict):return
+        with self.lock:
+            nested=self.state(identity,'scenario-usage') or {}
+            nested[result['session']]=ai_usage.merge(result['usage'])
+            self.state(identity,'scenario-usage',nested)
 
     def research(self, identity):
         saved=self.state(identity,'research') or {}
@@ -216,6 +240,7 @@ class Conversations:
             if continue_research is not None:
                 if saved.get('id')!=continue_research:raise ValueError('This research checkpoint expired. Use the latest Continue action.')
                 if saved.get('connection')!=connection:raise ValueError('The AI connection changed. Send a revised request to use the new connection.')
+            if self.state(identity,'usage-start') is None:self.state(identity,'usage-start',{'prior_messages':len(chat['messages'])})
             cancelled=threading.Event();self.active[identity]=cancelled
         messages=[];links=[];cache={};rounds=0;safe_messages=[]
         try:
@@ -228,6 +253,7 @@ class Conversations:
                     db.execute("UPDATE chats SET title=? WHERE id=? AND title='New chat'",(text.strip()[:70],identity))
                 if source is not None:
                     result,link=self.operation('scenario',{'message':text.strip(),'source':source},identity)
+                    self.record_scenario_usage(identity,result)
                     self.append(identity,'assistant',result.get('reply') or 'Scenario attachment reviewed.',[link] if link else [])
                     return self.read(identity)
                 messages=[{'role':'system','content':SYSTEM},*[{'role':m['role'],'content':m['content']} for m in chat['messages'][-30:]],{'role':'user','content':text.strip()}]
@@ -241,7 +267,13 @@ class Conversations:
                 provider_messages=self.compact_research(messages)
                 if len(json.dumps(provider_messages))>300000:
                     return self.pause(identity,safe_messages,links,cache,rounds,'context',connection)
-                response=self.requester(settings,provider_messages,TOOLS)
+                started=time.monotonic()
+                try:response=self.requester(settings,provider_messages,TOOLS)
+                except Exception as error:
+                    self.record_usage(identity,getattr(error,'ai_usage',None) or ai_usage.event(None,{'messages':provider_messages,'tools':TOOLS},seconds=time.monotonic()-started,failed=True))
+                    raise
+                receipt=response.pop('_usage',None) if isinstance(response,dict) else None
+                self.record_usage(identity,receipt or ai_usage.event(None,{'messages':provider_messages,'tools':TOOLS},response,time.monotonic()-started))
                 if not isinstance(response,dict) or (response.get('content') is not None and not isinstance(response['content'],str)):raise ValueError('AI provider returned an invalid message.')
                 if cancelled.is_set():break
                 rounds+=1;calls=response.get('tool_calls') or []
@@ -276,6 +308,7 @@ class Conversations:
                         if link:links.append(link)
                         # The Scenario Builder already produced a validated reply and review.
                         # Do not ask the outer AI to reinterpret it or repeat the operation.
+                        if name=='scenario':self.record_scenario_usage(identity,result)
                         if name=='scenario' and link and link.get('kind')=='scenario':
                             self.state(identity,'research',{})
                             self.append(identity,'assistant',result.get('reply') or 'Review the scenario proposal below.',links)

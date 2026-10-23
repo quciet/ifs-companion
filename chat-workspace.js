@@ -149,12 +149,21 @@
     },{once:true});
     iframe.src=url;views.append(iframe);if(current===owner)showTabs();
   }
+  const usagePanel=document.createElement('details');usagePanel.id='chatUsage';usagePanel.hidden=true;$('composer').before(usagePanel);
+  function showUsage(usage){
+    usagePanel.replaceChildren();const total=usage?.total;usagePanel.hidden=!total?.calls;if(!total?.calls)return;
+    const number=value=>Math.round(value||0).toLocaleString();
+    const describe=value=>number(value.calls)+' calls · input '+number(value.input_tokens)+(value.estimated_input_tokens?' + ~'+number(value.estimated_input_tokens)+' estimated':'')+' · cached '+number(value.cached_input_tokens)+' · output '+number(value.output_tokens)+(value.estimated_output_tokens?' + ~'+number(value.estimated_output_tokens)+' estimated':'');
+    const summary=document.createElement('summary');summary.textContent='AI usage · '+describe(total);usagePanel.append(summary);
+    for(const [label,value] of [['Companion',usage.companion],['Scenario Builder',usage.scenario]]){const p=document.createElement('p');p.textContent=label+': '+describe(value);usagePanel.append(p);}
+    const note=document.createElement('p');note.textContent='Cached input is included in reported input. Estimates use characters ÷ 4 when the provider omits usage; they are approximate. '+(total.unknown_output_calls?number(total.unknown_output_calls)+' call(s) have unknown output usage. ':'')+(total.failed_calls?number(total.failed_calls)+' failed call(s) included. ':'')+(usage.earlier_activity_not_tracked?'Earlier activity in this chat was not tracked. ':'')+'AI time: '+number(total.seconds)+' seconds. Monetary cost is not calculated without model pricing.';usagePanel.append(note);
+  }
   function render(chat){
     for(const cleanup of inlineCleanup)cleanup();inlineCleanup=[];
     $('messages').replaceChildren();$('welcome').classList.toggle('hidden',!!chat.messages.length);$('messages').classList.toggle('hidden',!chat.messages.length);
     const latest=chat.messages.flatMap(m=>m.links||[]).filter(l=>l.kind==='scenario').at(-1);
     for(const m of chat.messages){const element=message(m.content,m.role==='assistant');for(const link of m.links||[]){
-      if(link.kind==='scenario'){if(link===latest)inlineScenario(element,link,chat.id);}
+      if(link.kind==='scenario'){if(link===latest&&(link.context?.confirmation||link.context?.draft||link.context?.research))inlineScenario(element,link,chat.id);}
       else action(element,link.title,()=>open(link));
     }}
     if(chat.research){
@@ -169,6 +178,7 @@
       const revise=document.createElement('button');revise.type='button';revise.textContent='Revise request';revise.onclick=()=>$('prompt').focus();
       card.append(proceed,revise);$('messages').append(card);
     }
+    showUsage(chat.usage);
     if(chat.busy)busy.add(chat.id);else busy.delete(chat.id);updateBusy();
   }
   async function inlineScenario(host,link,owner){
@@ -179,6 +189,7 @@
       try{
         if(event.data?.type==='companion-scenario-height')frame.style.height=Math.max(180,Math.min(1200,event.data.height))+'px';
         if(event.data?.type==='companion-scenario-revise')$('prompt').focus();
+        if(event.data?.type==='companion-scenario-updated'&&current===owner)render(await api('/api/chats?id='+owner));
         if(event.data?.type==='companion-scenario-run'){
           const review=await api('/api/runs/prepare',{chat:owner,session:event.data.session,draft:event.data.draft,end_year:event.data.end_year});
           if(current===owner)await open({kind:'run-review',id:review.id,title:'Approve scenario run'});
