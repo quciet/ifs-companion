@@ -1,4 +1,4 @@
-#define AppVersion "0.3.6"
+#define AppVersion "0.3.7"
 #ifndef DistributionDir
   #define DistributionDir "..\dist\IFsCompanion"
 #endif

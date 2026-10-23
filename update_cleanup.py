@@ -31,6 +31,11 @@ def digest(path):
     with path.open('rb') as stream: return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+def generated(relative):
+    path = PurePosixPath(relative.lower())
+    return '__pycache__' in path.parts or path.suffix in ('.pyc', '.pyo')
+
+
 def read_manifest(path):
     value = json.loads(path.read_text(encoding='utf-8'))
     if not isinstance(value, dict) or not isinstance(value.get('version'), str) or not re.fullmatch(r'\d+\.\d+\.\d+', value['version']): raise ValueError('Invalid manifest version')
@@ -48,7 +53,7 @@ def write_manifest(root, version):
         if linked(path): raise ValueError('Cannot package links')
         if path.is_file():
             relative = path.relative_to(root).as_posix()
-            if relative.split('/')[0].lower() in PROTECTED: continue
+            if relative.split('/')[0].lower() in PROTECTED or generated(relative): continue
             files[relative] = digest(path)
     (root/MANIFEST).write_text(json.dumps({'version':version, 'files':files}, indent=2), encoding='utf-8')
 
@@ -65,7 +70,7 @@ def cleanup(app_root, data_root, version):
     if data.is_relative_to(root):
         if data == root: raise ValueError('Storage overlaps application root')
         protected.add(data.relative_to(root).parts[0].lower())
-    def owned(name): return name.split('/')[0].lower() not in protected
+    def owned(name): return name.split('/')[0].lower() not in protected and not generated(name)
     # Validate every new file before deleting anything (partial updates fail closed).
     for name, checksum in current['files'].items():
         path = safe_file(root, name)

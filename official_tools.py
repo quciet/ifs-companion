@@ -10,7 +10,7 @@ import zipfile
 from tool_manager import MAX_UPLOAD, manifest, release_metadata
 
 CATALOG_URL = 'https://raw.githubusercontent.com/quciet/ifs-companion/main/official-tools/catalog.json'
-COMPANION_VERSION = (0, 3, 6)
+COMPANION_VERSION = (0, 3, 7)
 RELEASE_PREFIX = 'https://github.com/quciet/ifs-companion/releases/download/'
 
 def version(text):
