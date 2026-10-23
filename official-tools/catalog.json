@@ -49,17 +49,17 @@
     {
       "id": "ifs-scenario-builder",
       "name": "Scenario Builder",
-      "version": "0.4.3",
-      "min_companion_version": "0.3.6",
+      "version": "0.4.4",
+      "min_companion_version": "0.3.8",
       "api_version": 1,
       "platform": "win-x64",
-      "sha256": "e46f16598f6615e57854e79f5ddea5f984b6aafe16578c2588decd4fd9916c8c",
-      "size": 48096,
-      "installed_size": 155880,
+      "sha256": "68e5c1106826b85e08ae3566c3485fc463ffda45c0c37c266ec80334f8dc01a5",
+      "size": 54976,
+      "installed_size": 176291,
       "released_at": "2026-10-23",
-      "release_notes": "# Scenario Builder 0.4.3\n\n- Removes the fixed metadata research-round cutoff. Productive lookups can continue beyond the former limit.\n- Detects repeated calls and identical results without new information, reuses cached lookups, and offers Continue or Revise with progress preserved.\n- Saves complete metadata exchanges during research so an interrupted service can restore them. Stop, provider/format failures and actual context constraints still pause with saved progress.\n- Retains main-chat review, explicit confirmation, local compiler validation, IFs baseline defaults and group-aware exports.\n\nRequires **IFsCompanion 0.3.6 or newer**. Update Companion first, then update this optional tool through Manage tools. Saved scenarios are preserved. No confirmation or model-run approval is bypassed.\n",
-      "description": "Create and modify IFs scenarios in the main chat. Productive research has no round-count cutoff; stalled lookups can continue with saved progress. Includes explicit confirmation, graphs, preview and export. Optional tool.",
-      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.4.3/ifs-scenario-builder-0.4.3-win-x64.ifstool"
+      "release_notes": "# Scenario Builder 0.4.4\n\n- Validates explicit parameter names and obvious meaning conflicts against the selected IFs installation before paid research. Missing names are suggestions requiring a user choice, never silent substitutions.\n- Supplies verified dimensions, units, bounds and audited polarity together; preloads exact identifiers in follow-ups and supplies the canonical country list once. Compacts repeated group-baseline receipts while retaining target coordinates and values.\n- Adds baseline-relative scaling computed locally for each country, subgroup and year, preserving actual saved Current Path differences instead of assuming every input starts at one.\n- Feeds invalid proposals back to the AI with parameter, target, year and reference details when available. It can repair its own numeric, dimension or direction mistakes without asking users to repeat clear instructions. Repeated unsuccessful repairs pause with the request and candidate saved and a Continue action. Genuine missing assumptions and overlapping rules still require user input.\n- Checks entries independently; opposite changes in different countries are allowed. Conflicting narrative phrases no longer become a global last-phrase direction rule. Numeric multiplier assumptions in clarification prose must be submitted for validation.\n- Tracks reported and estimated AI usage through Companion's main chat, including failures and continuation. Inline reviews no longer duplicate the chat reply.\n\nRequires **IFsCompanion 0.3.8 or newer**. Update Companion first. No fixed research-round cap is introduced; actual provider/context limits and no-progress detection preserve completed work. Saved scenarios, explicit confirmation and local compiler checks are retained.\n\n# Scenario Builder 0.4.3\n\n- Removes the fixed metadata research-round cutoff. Productive lookups can continue beyond the former limit.\n- Detects repeated calls and identical results without new information, reuses cached lookups, and offers Continue or Revise with progress preserved.\n- Saves complete metadata exchanges during research so an interrupted service can restore them. Stop, provider/format failures and actual context constraints still pause with saved progress.\n- Retains main-chat review, explicit confirmation, local compiler validation, IFs baseline defaults and group-aware exports.\n\nRequires **IFsCompanion 0.3.6 or newer**. Update Companion first, then update this optional tool through Manage tools. Saved scenarios are preserved. No confirmation or model-run approval is bypassed.\n",
+      "description": "Create and modify IFs scenarios in the main chat, with local parameter checks, efficient metadata research, baseline-relative changes, automatic proposal repair and tracked AI usage. Optional tool; explicit confirmation before export.",
+      "url": "https://github.com/quciet/ifs-companion/releases/download/scenario-builder-v0.4.4/ifs-scenario-builder-0.4.4-win-x64.ifstool"
     }
   ]
 }
