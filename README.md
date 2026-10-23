@@ -89,7 +89,7 @@ values, and the draft file before saving a distinct file with descriptive commen
 
 Tool data and generated files live under the per-tool storage folder, separately
 from program files. Uninstall preserves that data. See
-[Scenario Builder usage](scenario-tool/README.md) for full details and the build
+[Scenario Builder usage](https://github.com/quciet/ifs-scenario-builder) for full details and the build
 command. Only Model Vetting works without installing an optional tool.
 
 ## Update Companion
@@ -123,8 +123,8 @@ Companion and the new official tool packages use one private Python runtime. Opt
 - `build/package-<id>/IFsCompanion/` is temporary staging for current builds. Successful builds remove their staging folder. Failed builds may leave one for diagnosis.
 - `dist/IFsCompanion/` is an existing runnable development/portable copy used by `start.ps1`. It can contain real saved work in `data/` and its storage selection in `storage.json`. Do not treat it as disposable build output. `build.ps1` creates immutable versioned releases. `start.ps1` verifies the newest local portable release and updates program files in this folder before launch, preserving data and storage.json. Close the running dist app before updating; use `start.ps1 -SyncOnly` to update without launching. Increment the application version before each changed release.
 - `dist/IFsCompanionEngine/` was the separate PyInstaller engine output, later copied into the desktop package. Shared-Python builds no longer use it.
-- `dist/ScenarioBuilder/` was standalone Scenario Builder packaging output. The explicit legacy `scenario-tool/build_tool.py --standalone` command can regenerate it; normal shared-Python packaging does not need it.
+- `dist/ScenarioBuilder/` was standalone Scenario Builder packaging output. Scenario Builder now lives in the separate `ifs-scenario-builder` repository and uses shared-Python packaging.
 
-The obsolete separate engine and Scenario Builder output copies and their PyInstaller work directories were removed during cleanup. Legacy build recipes are retained for compatibility. Build tools, shared-runtime development environments, test evidence, and saved user data are kept separately and should not be removed solely because they are old.
+The obsolete separate engine and Scenario Builder output copies and their PyInstaller work directories were removed during cleanup. The obsolete Scenario Builder standalone recipe has been retired. Build tools, shared-runtime development environments, test evidence, and saved user data are kept separately and should not be removed solely because they are old.
 
 Temporary-file policy: builds now remove their own package staging in a finally block, including after failure. Test runs must use disposable per-run directories and clean up runtime/tool copies and browser caches after stopping their own processes. Keep concise diagnostic reports, not full extracted environments. Saved work and reusable development dependencies are excluded; see AGENTS.md.

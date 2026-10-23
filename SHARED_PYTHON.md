@@ -50,14 +50,14 @@ source development, prepare the private runtime once in a fresh destination:
 ```
 
 The sibling tool builders now default to shared packaging and use Companion's
-`packaging/build_shared_tool.py`. `--standalone` explicitly selects their legacy
-builders. Set `IFS_COMPANION_PATH` if the repositories are not siblings. Examples:
+`packaging/build_shared_tool.py`. Where supported, `--standalone` explicitly selects a legacy
+builder. Scenario Builder supports shared packaging only. Set `IFS_COMPANION_PATH` if the repositories are not siblings. Examples:
 
 ```powershell
 .\.packaging-venv314\Scripts\python.exe packaging/build_shared_tool.py --tool ifs-autotune --version 0.2.0
 .\.packaging-venv314\Scripts\python.exe packaging/build_shared_tool.py --tool ifs-code-reader --version 0.4.0
 .\.packaging-venv314\Scripts\python.exe packaging/build_shared_tool.py --tool ifs-model-vetting --version 0.3.0
-.\.packaging-venv314\Scripts\python.exe packaging/build_shared_tool.py --tool ifs-scenario-builder --version 0.2.0
+.\.packaging-venv314\Scripts\python.exe packaging/build_shared_tool.py --tool ifs-scenario-builder --version NEW_VERSION
 ```
 
 Builders emit `.ifstool`, `.sha256` and `.release.json`. Publish new versioned
@@ -68,3 +68,5 @@ excluded because the actual download depends on what is already installed.
 Treat `official-python-v1` as immutable. Changing dependency versions requires a
 new reviewed profile and migration work, not editing an installed user's library
 directories. The current implementation intentionally supports one pinned profile.
+
+Scenario Builder source is in the sibling [ifs-scenario-builder repository](https://github.com/quciet/ifs-scenario-builder). Its `scripts/build_tool.py` passes its source path explicitly; all shared builders also accept `--source PATH` and `--output-dir PATH`. Scenario tests live in that repository.

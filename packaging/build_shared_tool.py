@@ -26,15 +26,17 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tool',choices=NAMES,required=True)
     parser.add_argument('--version',required=True)
+    parser.add_argument('--source',type=Path,help='Override the sibling source checkout')
+    parser.add_argument('--output-dir',type=Path,help='Override the release output directory')
     parser.add_argument('--release-notes',type=Path)
     parser.add_argument('--release-date',default=datetime.now(timezone.utc).date().isoformat())
     args=parser.parse_args()
     import re
     if not re.fullmatch(r'\d+\.\d+\.\d+',args.version):raise ValueError('Invalid version')
     source=ROOT.parent/('ifs-code-interpreter' if args.tool=='ifs-code-reader' else args.tool)
-    if args.tool=='ifs-scenario-builder':source=ROOT
-    release=source/('scenario-tool/release' if args.tool=='ifs-scenario-builder' else 'release')
-    release.mkdir(exist_ok=True)
+    source=(args.source or source).resolve()
+    release=args.output_dir or source/'release'
+    release.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory() as temporary:
         stage=Path(temporary)
         if args.tool=='ifs-model-vetting':
@@ -59,13 +61,12 @@ def main():
             shutil.copy2(source/'README.md',stage/'README.md')
             entry='tool/companion_service.py'
         elif args.tool=='ifs-scenario-builder':
-            for name in ('service.py','index.html','base.css','bridge.js'):
-                shutil.copy2(source/'scenario-tool'/name,stage/name)
-            for name in ('scenario_service.py','scenario_compiler.py','scenario_intelligence.py','ai_settings.py','installation_validation.py','scenario.js','scenario.css','LICENSE'):
+            for name in ('service.py','index.html','base.css','bridge.js','scenario_service.py',
+                         'scenario_compiler.py','scenario_intelligence.py','scenario.js','scenario.css','LICENSE'):
                 shutil.copy2(source/name,stage/name)
-            # Static files are beside the service in the tool package.
-            p=stage/'service.py'
-            p.write_text(p.read_text(encoding='utf-8').replace("ROOT if getattr(sys, 'frozen', False) or name not in ('scenario.css','scenario.js') else ROOT.parent",'ROOT'),encoding='utf-8')
+            # Host-owned helpers are bundled so installed tools need no source checkout.
+            for name in ('ai_settings.py','installation_validation.py'):
+                shutil.copy2(ROOT/name,stage/name)
             entry='service.py'
         else:
             subprocess.run(['npm.cmd','run','build'],cwd=source/'frontend',check=True)
