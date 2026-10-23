@@ -1,3 +1,12 @@
+# IFsCompanion 0.3.5
+
+- Scenario Builder proposals, confirmation and draft controls appear inline in the main conversation instead of opening a separate scenario interface.
+- Scenario revisions use the main composer. Attach or drop a .sce file, add a message and send them together; attaching a file no longer jumps directly to model-run approval.
+- Confirmed draft state is saved with the conversation and restored when the task is reopened. Only the latest scenario review is interactive.
+- Scenario Builder opens from older tool links return to the main chat. Model execution still requires a separate explicit approval.
+
+Install optional Scenario Builder **0.4.2** through Manage tools to use the integrated review. Model Vetting remains the only included tool. Existing settings, saved scenarios and tool data are preserved.
+
 # 0.3.4
 
 - Validate the compact message composer in the desktop startup check without imposing the previous UI height.

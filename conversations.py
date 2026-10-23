@@ -67,14 +67,14 @@ TOOLS = [
     function('comparison', 'Propose a comparison for user review in Model Vetting. Does not execute it. Use exact paths and indicator codes.',
         {'a': {'type': 'string'}, 'comparisons': {'type': 'array', 'items': {'type': 'string'}},
          'variables': {'type': 'array', 'items': {'type': 'string'}}}, ['a', 'comparisons', 'variables']),
-    function('scenario', 'Discuss, create or revise a scenario through the validated Scenario Builder workflow. Pass the user request faithfully with relevant agreed context. Approval remains a user action in the review tab.',
+    function('scenario', 'Discuss, create or revise a scenario through the validated Scenario Builder workflow. Pass the user request faithfully with relevant agreed context. Approval remains a user action in the conversation.',
         {'message': {'type': 'string'}}, ['message']),
     function('run_scenario','Prepare execution review for this chat\'s confirmed scenario. Does not execute: the user must approve the exact file and horizon in the review tab.',
         {'end_year':{'type':'integer'}},['end_year']),
     function('jobs','List this chat\'s durable jobs and their progress.'),
     function('job','Inspect one durable job by its exact ID.',{'id':{'type':'string'}},['id']),
     function('open_tool', 'Open a capability for direct use. Scenario creation uses the validated scenario workflow.',
-        {'id': {'type': 'string', 'enum': ['ifs-autotune', 'ifs-scenario-builder', 'ifs-code-reader']}}, ['id'])]
+        {'id': {'type': 'string', 'enum': ['ifs-autotune', 'ifs-code-reader']}}, ['id'])]
 
 SYSTEM = '''You are IFsCompanion, assisting with one selected IFs installation.
 Use installation and indicator lookups to resolve exact inputs. Never invent IFs parameter meanings,
@@ -83,7 +83,7 @@ when the evidence is missing or its source version is not verified against the i
 Comparison workflow: clarify scope, find exact runs and indicators, then propose a selection for review.
 The user starts the comparison in the existing Model Vetting interface. Never claim it ran already.
 Scenario workflow: use scenario for creation and revisions. Include the user request and agreed assumptions.
-Its reply and review tab describe the validated proposal; do not change its numbers or claim user approval.
+Its reply and inline conversation card describe the validated proposal; do not change its numbers or claim user approval.
 When asked to execute a confirmed scenario, use run_scenario to prepare a separate execution approval.
 Only the user can start it from that review tab. Use jobs/job to inspect actual progress and completed
 output paths. After completion ask for missing comparison indicators, then propose a comparison.
@@ -167,8 +167,10 @@ class Conversations:
     def busy(self):
         with self.lock: return bool(self.active)
 
-    def send(self, identity, text):
+    def send(self, identity, text, source=None):
         if not isinstance(text, str) or not text.strip() or len(text) > 16000: raise ValueError('Enter a message up to 16,000 characters.')
+        if source is not None:
+            if not isinstance(source,dict) or not isinstance(source.get('name'),str) or not source['name'].lower().endswith('.sce') or len(source['name'])>255 or not isinstance(source.get('text'),str) or len(source['text'].encode('utf-8'))>1_000_000:raise ValueError('Choose a UTF-8 .sce file up to 1 MB.')
         with self.lock:
             chat = self.read(identity)
             if identity in self.active: raise ValueError('This chat is still responding.')
@@ -178,7 +180,13 @@ class Conversations:
             cancelled = threading.Event()
             self.active[identity] = cancelled
         try:
-            self.append(identity, 'user', text.strip())
+            self.append(identity, 'user', ('Attached: '+source['name']+'\n\n' if source else '')+text.strip())
+            with self.connect() as db:
+                db.execute("UPDATE chats SET title=? WHERE id=? AND title='New chat'", (text.strip()[:70], identity))
+            if source is not None:
+                result,link=self.operation('scenario',{'message':text.strip(),'source':source},identity)
+                self.append(identity,'assistant',result.get('reply') or 'Scenario attachment reviewed.',[link] if link else [])
+                return self.read(identity)
             with self.connect() as db:
                 db.execute("UPDATE chats SET title=? WHERE id=? AND title='New chat'", (text.strip()[:70], identity))
             messages = [{'role': 'system', 'content': SYSTEM}, *[{'role': m['role'], 'content': m['content']} for m in chat['messages'][-30:]],

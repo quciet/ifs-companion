@@ -86,7 +86,7 @@ def main():
             entry='electron/IFsAutotune.exe'
         meta={'id':args.tool,'name':NAMES[args.tool],'version':args.version,'api_version':1,
               'platform':'win-x64','kind':'web-service','entrypoint':entry,'python_profile':PROFILE,
-              'min_companion_version':'0.3.0','released_at':args.release_date,
+              'min_companion_version':'0.3.5' if args.tool=='ifs-scenario-builder' else '0.3.0','released_at':args.release_date,
               'release_notes':args.release_notes.read_text(encoding='utf-8') if args.release_notes else 'Uses Companion’s shared Python runtime and libraries. Missing libraries download on first installation.'}
         (stage/'tool.json').write_text(json.dumps(meta,indent=2),encoding='utf-8')
         package=release/f'{args.tool}-{args.version}-win-x64.ifstool'

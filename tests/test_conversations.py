@@ -6,6 +6,25 @@ from conversations import Conversations
 
 
 class ConversationTests(unittest.TestCase):
+    def test_attachment_uses_scenario_backend_and_keeps_main_chat_history(self):
+        calls=[]
+        self.service.operation=lambda name,args,owner:(calls.append((name,args,owner)) or ({'reply':'Reviewed attachment.'},{'kind':'scenario','id':'ifs-scenario-builder','context':{'session':'owned'}}))
+        self.service.requester=lambda *args:self.fail('Attachment must go directly to the validated scenario backend')
+        owner=self.service.create()['id'];source={'name':'Policy.sce','text':'CUSTOM,ylm,Kenya,1,2\n'}
+        chat=self.service.send(owner,'Explain this file',source=source)
+        self.assertEqual(calls,[('scenario',{'message':'Explain this file','source':source},owner)])
+        self.assertIn('Policy.sce',chat['messages'][0]['content'])
+        self.assertEqual(chat['messages'][-1]['content'],'Reviewed attachment.')
+        self.assertEqual(chat['messages'][-1]['links'][0]['kind'],'scenario')
+        self.assertFalse(self.service.busy())
+
+    def test_invalid_attachment_is_rejected_without_history_or_backend_calls(self):
+        owner=self.service.create()['id']
+        self.service.operation=lambda *args:self.fail('Invalid attachment reached backend')
+        for source in ({'name':'bad.txt','text':'x'},{'name':'big.sce','text':'x'*1_000_001}):
+            with self.assertRaises(ValueError):self.service.send(owner,'Inspect',source=source)
+        self.assertEqual(self.service.read(owner)['messages'],[])
+
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
         self.installation = 'test-installation'

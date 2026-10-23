@@ -259,6 +259,8 @@ class Handler(app.Handler):
                     if not json.load(response).get('chat_review'):raise ValueError('Update Scenario Builder to enable main-chat reviews.')
             except urllib.error.HTTPError:raise ValueError('Update Scenario Builder to enable main-chat reviews.') from None
             body = {'message':args['message']}
+            if args.get('source') is not None:body['source']=args['source']
+            if args.get('source') is not None:self.conversations().state(conversation,'scenario-session','')
             session = self.conversations().state(conversation, 'scenario-session')
             if not session:
                 with self.tools().request('ifs-scenario-builder','api/scenario/new','POST',b'{}') as response:
@@ -275,7 +277,8 @@ class Handler(app.Handler):
             return result, {'kind':'scenario','id':'ifs-scenario-builder','title':'Review scenario', 'context':result}
         if name == 'open_tool':
             identity = args['id']
-            if identity not in ('ifs-autotune','ifs-scenario-builder','ifs-code-reader'): raise ValueError('Unsupported capability.')
+            if identity=='ifs-scenario-builder':return {'message':'Use the scenario operation in this conversation; Scenario Builder has no separate chat.'},None
+            if identity not in ('ifs-autotune','ifs-code-reader'): raise ValueError('Unsupported capability.')
             self.tools().read(identity)
             return {'status':'workspace link ready'}, {'kind':'tool','id':identity,'title':{'ifs-autotune':'Open Autotune','ifs-scenario-builder':'Build and review scenario','ifs-code-reader':'Inspect IFs knowledge'}[identity]}
         raise ValueError('Unknown operation.')
@@ -601,11 +604,38 @@ class Handler(app.Handler):
                 if self.path.endswith('/release'):return self.send(controller.release(request.get('lease')))
                 return self.send(controller.acquire('Autotune'))
             except (ValueError,OSError) as error:return self.send({'error':str(error)},status=400)
+        if self.path == '/api/chats/scenario':
+            try:
+                self.tool_access(mutate=True)
+                size=int(self.headers.get('Content-Length',0))
+                if not 0<size<4096:raise ValueError('Invalid review request.')
+                request=json.loads(self.rfile.read(size));owner=request.get('id');service=self.conversations();service.read(owner)
+                session=service.state(owner,'scenario-session')
+                if not session or request.get('session')!=session:raise ValueError('This scenario does not belong to this chat.')
+                with service.lock:
+                    if owner in service.active:raise ValueError('Wait for the current response before confirming.')
+                    if service.read(owner)['installation']!=str(app.saved_installation() or ''):raise ValueError('The installation changed. Start a new chat.')
+                    service.active[owner]=threading.Event()
+                try:
+                    body={'session':session}
+                    for key in ('confirmation','continue_research'):
+                        if key in request:body[key]=request[key]
+                    if len(body)!=2:raise ValueError('Choose a confirmation or research continuation.')
+                    self.tools().start('ifs-scenario-builder',app.saved_installation())
+                    service.state(owner,'scenario-active',True)
+                    with self.tools().request('ifs-scenario-builder','api/scenario/chat','POST',json.dumps(body).encode()) as response:result=json.load(response)
+                    service.state(owner,'scenario-review',result)
+                    service.append(owner,'assistant',result.get('reply') or 'Scenario review updated.',[{'kind':'scenario','id':'ifs-scenario-builder','title':'Scenario proposal','context':result}])
+                finally:
+                    service.state(owner,'scenario-active',False)
+                    with service.lock:service.active.pop(owner,None)
+                return self.send(result)
+            except (ValueError,OSError) as error:return self.send({'error':str(error)},status=400)
         if self.path in ('/api/chats/create','/api/chats/send','/api/chats/stop','/api/chats/event','/api/chats/touch'):
             try:
                 self.tool_access(mutate=True)
                 size = int(self.headers.get('Content-Length', 0))
-                if not 0 < size <= 70000: raise ValueError('Invalid request size.')
+                if not 0 < size <= 6_100_000: raise ValueError('Invalid request size.')
                 request = json.loads(self.rfile.read(size))
                 if not isinstance(request, dict): raise ValueError('Invalid request.')
                 service = self.conversations()
@@ -632,7 +662,7 @@ class Handler(app.Handler):
                 owner=request.get('id');service.read(owner)
                 job=self.jobs().create('chat',owner,{'stage':'responding'})
                 try:
-                    result=service.send(owner,request.get('message'))
+                    result=service.send(owner,request.get('message'),source=request.get('source'))
                     cancelled=bool(result['messages'] and result['messages'][-1]['content']=='Stopped.')
                     self.jobs().update(job['id'],'cancelled' if cancelled else 'complete',stage='finished')
                     return self.send(result)

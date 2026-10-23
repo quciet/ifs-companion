@@ -241,6 +241,7 @@ $('toolPackage').onchange=async()=>{
   }catch(error){toolMessage(error.message,true);}finally{toolBusy=false;$('installTool').disabled=false;renderOfficialTools();}
 };
 async function openTool(tool){
+  if(tool.id==='ifs-scenario-builder'){navigate('companion');$('prompt').focus();return;}
   if(tool.id==='ifs-model-vetting'){navigate('compare');return;}
   try{status(null);$('viewTitle').textContent='Opening '+tool.name+'…';const result=await api('/api/tools/open',{id:tool.id});
     let target=toolFrames.get(tool.id);

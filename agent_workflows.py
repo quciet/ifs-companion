@@ -6,7 +6,7 @@ identities. Distinguish implemented equations from inferred effects. Do not infe
 between a bundled source revision and the selected installation without evidence.''',
     'scenario': '''Use shared IFs knowledge to clarify policy mechanisms when necessary.
 Use the scenario operation for installed parameters, country scope, annual trajectories and
-validated proposals. Pass agreed assumptions faithfully. Its review tab supplies existing graphs,
+validated proposals. Pass agreed assumptions faithfully. Its inline conversation card supplies graphs,
 file preview, user confirmation and export. Revisions require a new proposal and approval.
 Do not approve on the user's behalf. Use run_scenario to prepare execution approval of the exact
 confirmed file and horizon. The review tab starts the run only after the user clicks Approve and run.

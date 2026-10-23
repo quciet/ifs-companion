@@ -75,3 +75,5 @@ body>main:has(#chatLayout.has-workspace:not(.hidden)){padding-left:16px;padding-
 #companionView .future{height:24px}
 #chatLayout.has-workspace .suggestions{grid-template-columns:1fr}
 #chatLayout.has-workspace #welcome{margin-bottom:24px}
+
+.inlineScenario{display:block;width:100%;height:360px;border:0;background:transparent;margin-top:12px}.chatAttachment{display:flex;gap:12px;align-items:center;padding:8px 12px}.chatAttachment[hidden]{display:none}

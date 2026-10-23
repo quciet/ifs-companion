@@ -4,6 +4,8 @@
   let current=null, sequence=0;
   const busy=new Set(), drafts=new Map(), spaces=new Map();
   const notifiedJobs=new Set();
+  const attachments=new Map();
+  let inlineCleanup=[];
   let runningTasks=new Set(), recentSignature='';
   const list=document.createElement('div');list.id='chatList';
   $('taskRecents').append(list);
@@ -88,6 +90,7 @@
     workspace.hidden=!entries.length;layout.classList.toggle('has-workspace',!!entries.length);workspaceDivider.hidden=!entries.length;resizePanels();
   }
   async function open(link){
+    if(link.kind==='tool'&&link.id==='ifs-scenario-builder'){navigate('companion');$('prompt').focus();return;}
     const owner=current, entries=space(), key=JSON.stringify(link);
     let entry=entries.find(t=>t.key===key);
     if(entry){entries.forEach(t=>t.active=t===entry);showTabs();return;}
@@ -147,9 +150,35 @@
     iframe.src=url;views.append(iframe);if(current===owner)showTabs();
   }
   function render(chat){
+    for(const cleanup of inlineCleanup)cleanup();inlineCleanup=[];
     $('messages').replaceChildren();$('welcome').classList.toggle('hidden',!!chat.messages.length);$('messages').classList.toggle('hidden',!chat.messages.length);
-    for(const m of chat.messages){const element=message(m.content,m.role==='assistant');for(const link of m.links||[])action(element,link.title,()=>open(link));}
+    const latest=chat.messages.flatMap(m=>m.links||[]).filter(l=>l.kind==='scenario').at(-1);
+    for(const m of chat.messages){const element=message(m.content,m.role==='assistant');for(const link of m.links||[]){
+      if(link.kind==='scenario'){if(link===latest)inlineScenario(element,link,chat.id);}
+      else action(element,link.title,()=>open(link));
+    }}
     if(chat.busy)busy.add(chat.id);else busy.delete(chat.id);updateBusy();
+  }
+  async function inlineScenario(host,link,owner){
+    const frame=document.createElement('iframe');frame.title='Scenario proposal and file';frame.className='inlineScenario';host.append(frame);
+    const listener=async event=>{
+      if(!frame.isConnected){window.removeEventListener('message',listener);return;}
+      if(event.origin!==location.origin||event.source!==frame.contentWindow)return;
+      try{
+        if(event.data?.type==='companion-scenario-height')frame.style.height=Math.max(180,Math.min(1200,event.data.height))+'px';
+        if(event.data?.type==='companion-scenario-revise')$('prompt').focus();
+        if(event.data?.type==='companion-scenario-run'){
+          const review=await api('/api/runs/prepare',{chat:owner,session:event.data.session,draft:event.data.draft,end_year:event.data.end_year});
+          if(current===owner)await open({kind:'run-review',id:review.id,title:'Approve scenario run'});
+        }
+      }catch(error){status(error);}
+    };
+    window.addEventListener('message',listener);inlineCleanup.push(()=>window.removeEventListener('message',listener));
+    try{
+      const result=await api('/api/tools/open',{id:'ifs-scenario-builder'});if(!frame.isConnected)return;
+      frame.onload=()=>{try{frame.contentWindow.companionScenario.open(link.context,{inline:true,chat:owner});}catch(error){status(error);}};
+      frame.src=result.url;
+    }catch(error){window.removeEventListener('message',listener);frame.remove();status(error);}
   }
   function updateTaskIndicators(){
     for(const row of list.children){
@@ -194,17 +223,17 @@
   async function select(id){
     if(current)drafts.set(current,$('prompt').value);
     current=id;const ticket=++sequence;const chat=await api('/api/chats?id='+encodeURIComponent(id));if(ticket!==sequence)return;
-    navigate('companion');$('prompt').value=drafts.get(id)||'';render(chat);showTabs();await refresh();await refreshTaskResults();
+    navigate('companion');$('prompt').value=drafts.get(id)||'';attachmentChip();render(chat);showTabs();await refresh();await refreshTaskResults();
   }
   const observer=new MutationObserver(()=>{layout.classList.toggle('hidden',$('companionView').classList.contains('hidden'));resizePanels();});
   observer.observe($('companionView'),{attributes:true,attributeFilter:['class']});
-  $('newTask').onclick=()=>{drafts.set(current,$('prompt').value);current=null;++sequence;navigate('companion');$('prompt').value='';drafts.delete(null);render({messages:[],busy:false});showTabs();status(null);refresh().catch(status);$('prompt').focus();};
+  $('newTask').onclick=()=>{drafts.set(current,$('prompt').value);current=null;++sequence;navigate('companion');$('prompt').value='';drafts.delete(null);attachmentChip();render({messages:[],busy:false});showTabs();status(null);refresh().catch(status);$('prompt').focus();};
   $('composer').onsubmit=async event=>{
-    event.preventDefault();const text=$('prompt').value.trim();if(!text||busy.has(current))return;
+    event.preventDefault();const source=attachments.get(current);const text=$('prompt').value.trim()||(source?'Inspect the attached scenario and summarize its parameters and scope. Do not propose changes yet.':'');if(!text||busy.has(current))return;
     try{
       if(!current){const chat=await api('/api/chats/create',{});await select(chat.id);}
-      const owner=current;busy.add(owner);$('prompt').value='';drafts.set(owner,'');message(text);updateBusy();refresh().catch(status);status(null);
-      try{const chat=await api('/api/chats/send',{id:owner,message:text});if(owner===current)render({...chat,busy:false});}
+      const owner=current;busy.add(owner);$('prompt').value='';drafts.set(owner,'');message((source?'Attached: '+source.name+'\n\n':'')+text);updateBusy();refresh().catch(status);status(null);
+      try{const chat=await api('/api/chats/send',{id:owner,message:text,...(source?{source}:{})});attachments.delete(owner);if(source)attachments.delete(null);if(owner===current)attachmentChip();if(owner===current)render({...chat,busy:false});}
       finally{busy.delete(owner);updateBusy();await refresh();}
     }catch(error){status(error);if(current){const chat=await api('/api/chats?id='+current);render(chat);}}
   };
@@ -218,17 +247,19 @@
   const runFile=document.createElement('input');runFile.type='file';runFile.accept='.sce';runFile.hidden=true;
   const runFileButton=document.createElement('button');runFileButton.type='button';runFileButton.textContent='+';runFileButton.className='attachFile';runFileButton.title='Upload .sce file for review';runFileButton.setAttribute('aria-label','Upload .sce file');
   runFileButton.onclick=()=>runFile.click();$('composer').querySelector('.composerActions').prepend(runFileButton,runFile);
-  runFile.onchange=async()=>{
-    const file=runFile.files[0];runFile.value='';if(!file)return;
-    try{
-      if(file.size>1_000_000||!file.name.toLowerCase().endsWith('.sce'))throw Error('Choose a .sce file up to 1 MB.');
+  const chip=document.createElement('div');chip.className='chatAttachment';chip.hidden=true;$('composer').prepend(chip);
+  function attachmentChip(){chip.replaceChildren();const source=attachments.get(current);chip.hidden=!source;if(!source)return;const label=document.createElement('span');label.textContent=source.name;const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','Remove attachment');remove.onclick=()=>{attachments.delete(current);attachmentChip();};chip.append(label,remove);}
+  async function attach(file){
+    if(!file||busy.has(current))return;
+    try{if(file.size>1_000_000||!file.name.toLowerCase().endsWith('.sce'))throw Error('Choose a .sce file up to 1 MB.');
       const text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());
       if(!current){const chat=await api('/api/chats/create',{});await select(chat.id);}
-      const endYear=window.prompt('Run through which year?','2100');if(endYear===null)return;
-      const review=await api('/api/runs/prepare',{chat:current,source:{name:file.name,text},end_year:Number(endYear)});
-      await open({kind:'run-review',id:review.id,title:'Approve '+file.name});
+      attachments.set(current,{name:file.name,text});attachmentChip();$('prompt').focus();
     }catch(error){status(error);}
-  };
+  }
+  runFile.onchange=async()=>{const file=runFile.files[0];runFile.value='';await attach(file);};
+  $('composer').addEventListener('dragover',event=>{if(event.dataTransfer?.types.includes('Files'))event.preventDefault();});
+  $('composer').addEventListener('drop',async event=>{if(!event.dataTransfer?.files.length)return;event.preventDefault();if(event.dataTransfer.files.length!==1){status(Error('Attach one .sce file at a time.'));return;}await attach(event.dataTransfer.files[0]);});
   const knowledge=document.createElement('section');const heading=document.createElement('h3');heading.textContent='IFs knowledge';
   const description=document.createElement('p');description.textContent='Prepare or inspect the shared source and wiki index used by all chats.';
   const prepare=document.createElement('button');prepare.textContent='Manage IFs knowledge';prepare.type='button';

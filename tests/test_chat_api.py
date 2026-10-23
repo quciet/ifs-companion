@@ -19,6 +19,24 @@ from jobs import Jobs
 
 
 class ChatApiTests(unittest.TestCase):
+    def test_inline_review_requires_owned_session_and_persists_confirmed_result(self):
+        chat=self.post('/api/chats/create',{})
+        from conversations import Conversations
+        service=self.server.conversations
+        service.state(chat['id'],'scenario-session','owned-session')
+        request={'id':chat['id'],'session':'owned-session','confirmation':'review-token'}
+        with self.assertRaises(HTTPError) as error:self.post('/api/chats/scenario',request,False)
+        error.exception.close()
+        with self.assertRaises(HTTPError) as error:self.post('/api/chats/scenario',{**request,'session':'other-chat'})
+        error.exception.close()
+        result={'session':'owned-session','reply':'Confirmed draft.','draft':{'id':'draft-token'}}
+        with patch.object(self.server.tools,'start'),patch.object(self.server.tools,'request',return_value=io.BytesIO(json.dumps(result).encode())):
+            self.assertEqual(self.post('/api/chats/scenario',request),result)
+        restored=Conversations(service.root,service.installation,None).read(chat['id'])
+        self.assertEqual(restored['messages'][-1]['links'][0]['context'],result)
+        self.assertEqual(service.state(chat['id'],'scenario-review'),result)
+        self.assertFalse(service.busy())
+
     def setUp(self):
         self.folder=tempfile.TemporaryDirectory()
         self.patch=patch.object(app,'DATA_ROOT',Path(self.folder.name));self.patch.start()
