@@ -226,14 +226,57 @@ class ScenarioService:
         self.settings_file = Path(settings_file) if settings_file else self.data_root/'companion/ai-settings.json'
         self.sessions = {}
         self.lock = threading.RLock()
+        self.restore_sessions()
 
-    def busy(self):
-        with self.lock:
-            return any(session['busy'] for session in self.sessions.values())
+    def restore_sessions(self):
+        from scenario_compiler import ScenarioRows
+        def decode(value):
+            if isinstance(value, list): return [decode(v) for v in value]
+            if isinstance(value, dict):
+                if value.get('__scenario_rows__') is True:
+                    return ScenarioRows(decode(value['rows']), value.get('comments',''), value.get('source'))
+                if set(value) == {'__path__'}: return Path(value['__path__'])
+                return {k:decode(v) for k,v in value.items()}
+            return value
+        try:
+            records = json.loads((self.data_root/'sessions.json').read_text(encoding='utf-8'))
+            self.sessions = decode(records)
+            for session in self.sessions.values(): session['busy'] = False
+        except (FileNotFoundError, ValueError, TypeError, KeyError): self.sessions = {}
 
-    def cancel(self):
+    def persist_sessions(self):
+        from scenario_compiler import ScenarioRows
+        def encode(value):
+            if isinstance(value, ScenarioRows):
+                return {'__scenario_rows__':True,'rows':[encode(v) for v in value], 'comments':value.comments, 'source':value.source}
+            if isinstance(value, Path): return {'__path__':str(value)}
+            if isinstance(value, dict): return {k:encode(v) for k,v in value.items()}
+            if isinstance(value, (list,tuple)): return [encode(v) for v in value]
+            return value
         with self.lock:
-            for session in self.sessions.values():
+            self.data_root.mkdir(parents=True, exist_ok=True)
+            path = self.data_root/'sessions.json'
+            temporary = path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(encode(self.sessions)),encoding='utf-8')
+            temporary.replace(path)
+
+    def busy(self, identity=None):
+        with self.lock:
+            return any(session['busy'] for key, session in self.sessions.items() if identity is None or key == identity)
+
+    def new(self, request):
+        _, _, _, digest=self.context()
+        with self.lock:
+            if len(self.sessions)>=64:raise ValidationError('Too many scenario chats. Restart or finish existing work first.')
+            identity=secrets.token_urlsafe(24)
+            self.sessions[identity]={'history':[],'source':None,'digest':digest,'busy':False,'draft':None}
+            self.persist_sessions()
+            return {'session':identity}
+
+    def cancel(self, identity=None):
+        with self.lock:
+            for key, session in self.sessions.items():
+                if identity is not None and key != identity: continue
                 session['cancelled'] = True
                 session['draft'] = None
                 session['pending'] = None
@@ -416,6 +459,7 @@ class ScenarioService:
         finally:
             with self.lock:
                 session['busy'] = False
+            self.persist_sessions()
 
     @staticmethod
     def parse_response(content):
@@ -718,9 +762,21 @@ class ScenarioService:
             refs, _, context, digest = self.context()
             if digest != session['digest']:
                 raise ValidationError('IFs installation changed. Start a new chat.')
-            text = Compiler(refs, context['base_year']).render(draft['rows'], purpose=draft['purpose'],
-                regeneration_prompt=draft['prompt'], model_context=context)
-            return {'text': text, 'filename': draft['review']['filename']}
+            if 'preview_text' not in draft:
+                draft['preview_text'] = Compiler(refs, context['base_year']).render(draft['rows'], purpose=draft['purpose'],
+                    regeneration_prompt=draft['prompt'], model_context=context)
+            text=draft['preview_text']
+            return {'text': text, 'filename': draft['review']['filename'], 'sha256':hashlib.sha256(text.encode()).hexdigest()}
+
+    def validate_file(self, request):
+        source=request.get('source',{})
+        text=source.get('text');name=source.get('name')
+        if not isinstance(text,str) or not isinstance(name,str) or not name.lower().endswith('.sce') or len(text.encode())>1_000_000:
+            raise ValidationError('Choose a UTF-8 .sce file up to 1 MB.')
+        refs,_,context,_=self.context()
+        rows=Compiler(refs,context['base_year']).parse(text,Path(name).name)
+        if not rows:raise ValidationError('The scenario file is empty.')
+        return {'text':text,'filename':Path(name).name,'context':context,'sha256':hashlib.sha256(text.encode()).hexdigest()}
 
     def export(self, request):
         with self.lock:

@@ -1,3 +1,22 @@
+# 0.3.4
+
+- Validate the compact message composer in the desktop startup check without imposing the previous UI height.
+
+# 0.3.3
+
+- Keep scenario run artifacts with their task, using the scenario name for saved results.
+- Add Save to IFs for independent scenario and result copies, with existing-file protection.
+- Show model year, logs, errors, saving and working-file recovery status.
+- Include the current task workspace and UI improvements.
+
+# 0.3.2
+
+- Show running work with a spinner beside its task in Recents; remove the separate Jobs interface.
+- Show saved comparison reports alongside chats in one flat task history.
+- Keep narrower user messages on the right and full-width companion responses on the left.
+- Keep tool workspaces on the right at narrow window sizes, with a distinct background and divider.
+- Add task deletion for saved history and task-owned artifacts.
+
 # IFsCompanion 0.3.0
 
 Official tools now share one private Python runtime and a locked set of libraries.

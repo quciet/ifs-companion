@@ -43,6 +43,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         try:
             if path == '/bridge/status': return self.send({'running': self.server.service.busy()})
+            if path == '/bridge/capabilities':return self.send({'chat_review':1,'session_cancel':1,'persistent_sessions':1,'approved_execution':1})
             if path == '/api/scenario/download':
                 identity = parse_qs(urlsplit(self.path).query).get('id', [''])[0]
                 return self.send(self.server.service.download(identity), content='application/octet-stream')
@@ -70,13 +71,17 @@ class Handler(BaseHTTPRequestHandler):
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
             if self.path == '/bridge/stop':
-                self.server.service.cancel()
+                identity = request.get('session')
+                self.server.service.cancel(identity)
                 deadline = time.monotonic()+70
-                while self.server.service.busy() and time.monotonic() < deadline: time.sleep(.1)
-                if self.server.service.busy(): raise ValueError('AI request is still stopping. Try again shortly.')
+                while self.server.service.busy(identity) and time.monotonic() < deadline: time.sleep(.1)
+                if self.server.service.busy(identity): raise ValueError('AI request is still stopping. Try again shortly.')
+                self.server.service.persist_sessions()
                 return self.send({'stopped':True})
-            if self.path in ('/api/scenario/chat','/api/scenario/export','/api/scenario/preview'):
-                return self.send(getattr(self.server.service, self.path.rsplit('/',1)[-1])(request))
+            if self.path in ('/api/scenario/new','/api/scenario/chat','/api/scenario/export','/api/scenario/preview','/api/scenario/validate_file'):
+                result = getattr(self.server.service, self.path.rsplit('/',1)[-1])(request)
+                self.server.service.persist_sessions()
+                return self.send(result)
             return self.send({'error':'Not found'}, 404)
         except (ValueError, OSError, KeyError, TypeError, ArithmeticError) as error:
             return self.send({'error':str(error)}, 400)

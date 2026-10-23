@@ -135,8 +135,20 @@
     catch(error){if(!el('scenarioPrompt').value)el('scenarioPrompt').value=typed;sizePrompt();note(error.message,true);}finally{setBusy(false);el('scenarioPrompt').focus();}
   };
   el('scenarioSave').onclick=async()=>{if(busy||!draft)return;const filename=el('scenarioFilename').value.trim();setBusy(true);note('Saving reviewed scenario…');try{const result=await api('/api/scenario/export',{session,draft:draft.id,filename});const parent=el('scenarioExportResult');parent.replaceChildren();const text=document.createElement('p');text.textContent='Saved: '+result.path;const link=document.createElement('a');link.href=result.download;link.download=result.filename;link.textContent='Download .sce';parent.append(text,link);note('Saved with descriptive comments. Existing files were not overwritten.');}catch(error){note(error.message,true);}finally{setBusy(false);}};
-  async function stopResearch(){note('Stopping after the current AI call returns…');try{await api('/bridge/stop',{});}catch(error){note(error.message,true);}}
+  async function stopResearch(){note('Stopping after the current AI call returns…');try{await api('/bridge/stop',session?{session}:{});}catch(error){note(error.message,true);}}
   el('scenarioStop').onclick=stopResearch;
   window.scenarioChat={start(prompt=''){navigate('scenario');el('scenarioPrompt').value=prompt;sizePrompt();el('scenarioPrompt').focus();},stop:stopResearch};
+  window.companionScenario={open(result){
+    resetDraft();el('scenarioMessages').replaceChildren();receive(result);
+    el('scenarioForm').hidden=true;el('scenarioNew').hidden=true;
+    const revise=document.createElement('p');revise.textContent='Describe revisions in the main Companion chat. Approval here applies only to this proposal.';
+    el('scenarioMessages').prepend(revise);
+    if(!el('scenarioRun')){
+      const year=document.createElement('input');year.id='scenarioRunYear';year.type='number';year.min=String(result.context.base_year);year.max='2100';year.value='2100';year.setAttribute('aria-label','Model run end year');
+      const run=document.createElement('button');run.id='scenarioRun';run.type='button';run.textContent='Review model run…';
+      run.onclick=()=>{if(!draft||busy)return;parent.postMessage({type:'companion-scenario-run',session,draft:draft.id,end_year:Number(year.value)},location.origin);};
+      el('scenarioSummary').append(year,run);
+    }
+  }};
   reset();
 })();

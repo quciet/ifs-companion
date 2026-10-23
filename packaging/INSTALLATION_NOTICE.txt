@@ -1,7 +1,7 @@
 Included software
 
-IFsCompanion includes Python 3.14.8, NumPy 2.5.3, Tcl/Tk, a PyInstaller
-bootloader, the .NET 10 runtime, Parquet.Net 2.1.4, and WebView2 SDK components.
+IFsCompanion includes Python 3.14.8, NumPy 2.5.4, pip, Tcl/Tk,
+the .NET 10 runtime, Parquet.Net 2.1.4, and WebView2 SDK components.
 These run inside the application package without changing your Python or PATH.
 
 The desktop interface uses Microsoft Edge WebView2 Runtime. If it is missing,

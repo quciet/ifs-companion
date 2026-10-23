@@ -9,7 +9,7 @@ IFsCompanion is a Windows desktop workspace for working with International Futur
 - **Return to saved work:** reopen saved comparisons from Recent Work.
 - **Manage tools:** install optional tools and check for tool updates from within the app.
 
-Model Vetting is included and works without an AI connection or API key. Model Vetting is the only included tool. Scenario Builder is an optional `.ifstool` package: install it from Manage tools to create or modify scenarios using the shared AI connection. The main Companion chat remains guided. Code Interpreter can be installed from its separate `.ifstool` package. Configure the shared Chat Completions-compatible provider under Settings > AI connection. Autotune can be installed from the official catalog or a separate tool package.
+Model Vetting is included and works without an AI connection or API key. Model Vetting is the only included tool. Scenario Builder is an optional `.ifstool` package: install it from Manage tools to create or modify scenarios using the shared AI connection. The source main chat supports persistent conversations and contextual tool review tabs; see [Chat workspace integration](CHAT_WORKSPACE.md) for capabilities, package requirements and remaining execution work. Code Interpreter can be installed from its separate `.ifstool` package. Configure the shared Chat Completions-compatible provider under Settings > AI connection. Autotune can be installed from the official catalog or a separate tool package.
 
 ## Download and install
 
@@ -116,3 +116,15 @@ feature need one manual app update before these controls become available.
 ### Shared Python (0.3.0+)
 
 Companion and the new official tool packages use one private Python runtime. Optional libraries download automatically on first installation and are stored once across tools. Uninstall removes only libraries no remaining tool requires; saved work stays. A first file installation may also require internet access. Legacy self-contained packages still work and retain their own runtimes until replaced with a new package. See [Shared Python](SHARED_PYTHON.md) for packaging and development commands.
+
+### Local build folders
+
+- `release/` contains the current distributable installer, portable ZIP, and SHA256 manifest. Older releases are pruned only after the new packages pass verification.
+- `build/package-<id>/IFsCompanion/` is temporary staging for current builds. Successful builds remove their staging folder. Failed builds may leave one for diagnosis.
+- `dist/IFsCompanion/` is an existing runnable development/portable copy used by `start.ps1`. It can contain real saved work in `data/` and its storage selection in `storage.json`. Do not treat it as disposable build output. `build.ps1` creates immutable versioned releases. `start.ps1` verifies the newest local portable release and updates program files in this folder before launch, preserving data and storage.json. Close the running dist app before updating; use `start.ps1 -SyncOnly` to update without launching. Increment the application version before each changed release.
+- `dist/IFsCompanionEngine/` was the separate PyInstaller engine output, later copied into the desktop package. Shared-Python builds no longer use it.
+- `dist/ScenarioBuilder/` was standalone Scenario Builder packaging output. The explicit legacy `scenario-tool/build_tool.py --standalone` command can regenerate it; normal shared-Python packaging does not need it.
+
+The obsolete separate engine and Scenario Builder output copies and their PyInstaller work directories were removed during cleanup. Legacy build recipes are retained for compatibility. Build tools, shared-runtime development environments, test evidence, and saved user data are kept separately and should not be removed solely because they are old.
+
+Temporary-file policy: builds now remove their own package staging in a finally block, including after failure. Test runs must use disposable per-run directories and clean up runtime/tool copies and browser caches after stopping their own processes. Keep concise diagnostic reports, not full extracted environments. Saved work and reusable development dependencies are excluded; see AGENTS.md.

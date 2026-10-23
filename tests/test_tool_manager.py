@@ -19,6 +19,22 @@ class ToolPackageTests(unittest.TestCase):
             z.writestr('tool.json',json.dumps(meta));z.writestr('app/tool.exe',b'fixture')
             for name,data in (extra or {}).items():z.writestr(name,data)
         buffer.seek(0);return buffer
+    def test_required_companion_version_uses_current_engine_version(self):
+        def package(required):
+            buffer=io.BytesIO()
+            with zipfile.ZipFile(buffer,'w') as archive:
+                archive.writestr('tool.json',json.dumps({'id':'version-test','name':'Version test',
+                    'version':'1.0.0','api_version':1,'platform':'win-x64','kind':'web-service',
+                    'entrypoint':'tool.exe','min_companion_version':required}))
+                archive.writestr('tool.exe',b'fixture')
+            buffer.seek(0)
+            return buffer
+        with patch('official_tools.COMPANION_VERSION',(0,3,4)):
+            self.manager.install(package('0.3.4'))
+            with self.assertRaisesRegex(ValueError,'requires Companion'):
+                self.manager.install(package('0.3.5'))
+        self.assertEqual(self.manager.read('version-test')['min_companion_version'],'0.3.4')
+
     def test_install_update_remove_preserves_data(self):
         self.manager.install(self.package(extra={'old.txt':'old'}))
         data=self.manager.data/'sample-tool/results';data.mkdir(parents=True)

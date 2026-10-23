@@ -1,6 +1,4 @@
 """Installed IFs baseline, preset and audited semantic interpretation. Read-only."""
-import csv
-import io
 import json
 import os
 from pathlib import Path

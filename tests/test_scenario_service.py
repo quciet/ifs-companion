@@ -59,6 +59,37 @@ class ScenarioServiceTests(unittest.TestCase):
         self.assertEqual(len(self.seen), 1)
         with self.assertRaises(ValidationError): self.service.chat({'session': result['session'], 'confirmation': token})
 
+    def test_preview_bytes_are_stable_for_execution_approval(self):
+        self.answer(proposal());result=self.chat({'message':'Double yield.'})
+        request={'session':result['session'],'draft':result['draft']['id']}
+        first=self.service.preview(request);second=self.service.preview(request)
+        self.assertEqual(first['text'],second['text']);self.assertEqual(first['sha256'],second['sha256'])
+
+    def test_imported_file_validated_without_ai_request(self):
+        result=self.service.validate_file({'source':{'name':'Existing.sce','text':'CUSTOM,ylm,Iraq,1,2\n'}})
+        self.assertEqual(result['text'],'CUSTOM,ylm,Iraq,1,2\n');self.assertEqual(self.seen,[])
+        with self.assertRaises(ValidationError):self.service.validate_file({'source':{'name':'Wrong.sce','text':'CUSTOM,unknown,Iraq,1\n'}})
+
+    def test_review_can_be_restored_after_service_restart(self):
+        self.answer(proposal())
+        proposed = self.service.chat({'message':'Double yield.'})
+        restored = ScenarioService(self.root, lambda:'fixture', self.service.requester)
+        with patch.object(restored, 'context', return_value=(self.refs, {'ylm':'Yield multiplier'}, self.context, 'digest')):
+            confirmed = restored.chat({'session':proposed['session'], 'confirmation':proposed['confirmation']['id']})
+            restored.persist_sessions()
+            again = ScenarioService(self.root, lambda:'fixture', self.service.requester)
+            with patch.object(again, 'context', return_value=(self.refs, {}, self.context, 'digest')):
+                preview = again.preview({'session':proposed['session'],'draft':confirmed['draft']['id']})
+                self.assertIn('ylm',preview['text'])
+
+    def test_cancel_targets_one_scenario_session(self):
+        self.answer(proposal());a=self.service.chat({'message':'First'})
+        self.answer(proposal());b=self.service.chat({'message':'Second'})
+        self.service.cancel(a['session'])
+        self.assertTrue(self.service.sessions[a['session']]['cancelled'])
+        self.assertFalse(self.service.sessions[b['session']]['cancelled'])
+        self.assertIsNotNone(self.service.sessions[b['session']]['pending'])
+
     def test_revision_and_installation_change_invalidate_confirmation(self):
         self.answer(proposal())
         result = self.service.chat({'message': 'Double yield.'})

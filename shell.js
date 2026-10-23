@@ -23,13 +23,14 @@ $('stopTool').onclick=async()=>{
   catch(error){status(error);}finally{button.disabled=false;button.textContent='Stop';updateToolControls();}
 };
 window.addEventListener('message',event=>{if(event.origin===location.origin&&event.source===activeToolFrame()?.contentWindow&&event.data?.type==='tool-navigation')updateToolControls();});
-function navigate(view){if(view==='compare'&&!comparisonEnabled){view='manage';toolMessage('Install Model Vetting to use this tool.');}currentView=view; if(view==='manage'){refreshTools().then(renderOfficialTools).catch(status);loadOfficialTools(true);}if(view==='compare'&&frame.getAttribute('src')==='about:blank')frame.src='/compare';const target=['companion','compare','settings','manage','optional'].includes(view)?view:'unavailable';for(const id of ['companion','compare','settings','manage','optional','unavailable'])$(id+'View').classList.toggle('hidden',id!==target);$('viewTitle').textContent=names[view];$('newChat').classList.toggle('hidden',view!=='companion');document.querySelector('[data-view="companion"]').classList.toggle('active',view==='companion');$('unavailableTitle').textContent=names[view];updateToolControls();}
+function navigate(view){if(view==='compare'&&!comparisonEnabled){view='manage';toolMessage('Install Model Vetting to use this tool.');}currentView=view; if(view==='manage'){refreshTools().then(renderOfficialTools).catch(status);loadOfficialTools(true);}if(view==='compare'&&frame.getAttribute('src')==='about:blank')frame.src='/compare';const target=['companion','compare','settings','manage','optional'].includes(view)?view:'unavailable';for(const id of ['companion','compare','settings','manage','optional','unavailable'])$(id+'View').classList.toggle('hidden',id!==target);$('viewTitle').textContent=names[view];$('unavailableTitle').textContent=names[view];updateToolControls();}
 document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>navigate(button.dataset.view));
 document.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{$('prompt').value=button.dataset.prompt;$('prompt').focus();});
-function message(content,reply=false){const element=document.createElement('div');element.className='message'+(reply?' reply':'');element.textContent=content;$('messages').append(element);$('welcome').classList.add('hidden');$('messages').classList.remove('hidden');element.scrollIntoView({block:'nearest'});return element;}
+function message(content,reply=false){const element=document.createElement('div');element.className='message'+(reply?' reply':'');element.setAttribute('aria-label',reply?'Companion':'You');element.textContent=content;$('messages').append(element);$('welcome').classList.add('hidden');$('messages').classList.remove('hidden');element.scrollIntoView({block:'nearest'});return element;}
 function action(parent,label,callback){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=callback;parent.append(button);}
-$('composer').onsubmit=event=>{event.preventDefault();const prompt=$('prompt').value.trim();if(!prompt)return;if(/scenario|\.sce|agricultural investment/i.test(prompt)){const tool=installedTools.find(t=>t.id==='ifs-scenario-builder');if(tool){openTool(tool);return;}const reply=message('Install Scenario Builder from Manage tools to create or modify .sce files.',true);action(reply,'Manage tools',()=>navigate('manage'));return;}message(prompt);$('prompt').value='';if(/compar|runfiles?|run\.db/i.test(prompt)){const reply=message('Open Model Vetting to select the two runfiles, variables, and tolerances. The comparison uses the existing IFs model-vetting engine.',true);action(reply,'Open Model Vetting',()=>navigate('compare'));}else{const reply=message('Use Code Interpreter for source-grounded model questions. Open Scenario Builder to create or modify a scenario.',true);const codeTool=installedTools.find(t=>t.id==='ifs-code-reader');action(reply,codeTool?'Open Code Interpreter':'Manage tools',()=>codeTool?openTool(codeTool):navigate('manage'));}};
-$('newChat').onclick=()=>{$('messages').replaceChildren();$('messages').classList.add('hidden');$('welcome').classList.remove('hidden');$('prompt').value='';navigate('companion');};
+// The chat workspace owns submission. Fail visibly if it cannot initialize.
+$('composer').onsubmit=event=>{event.preventDefault();status(Error('Chat could not start. Please restart Companion. Your message has been kept.'));};
+$('newTask').onclick=()=>{$('messages').replaceChildren();$('messages').classList.add('hidden');$('welcome').classList.remove('hidden');$('prompt').value='';navigate('companion');};
 // Expansion preferences survive the randomly assigned local engine port.
 async function preferences(){try{const data=await api('/api/ui-preferences');for(const id of ['toolsGroup','recentGroup'])$(id).open=Boolean(data[id]);}catch(error){status(error);}for(const id of ['toolsGroup','recentGroup'])$(id).addEventListener('toggle',()=>{api('/api/ui-preferences',{toolsGroup:$('toolsGroup').open,recentGroup:$('recentGroup').open}).catch(status);});}
 function applyInstallation(data){
@@ -72,15 +73,94 @@ $('defaultStorage').onclick=()=>{if(storageState)$('storageLocation').value=stor
 $('saveStorage').onclick=async()=>{const button=$('saveStorage');button.disabled=true;try{showStorage(await api('/api/storage',{location:$('storageLocation').value}));}catch(error){$('storageStatus').textContent=error.message;}finally{button.disabled=Boolean(storageState?.environment_override);}};
 $('cancelStorage').onclick=async()=>{try{showStorage(await api('/api/storage',{location:storageState.current}));}catch(error){$('storageStatus').textContent=error.message;}};
 api('/api/storage').then(showStorage).catch(error=>{$('storageStatus').textContent=error.message;});
-function showAISettings(data){
-  $('aiEndpoint').value=data.endpoint||'';$('aiModel').value=data.model||'';$('aiKey').value='';
-  $('aiKey').placeholder=data.has_key?'Saved securely; leave blank to keep':'API key (optional for local models)';
-  $('aiStatus').textContent=data.configured?'Configuration saved. Shared by Code Interpreter and Scenario Builder.':'Configure a Chat Completions-compatible provider for Code Interpreter and Scenario Builder.';
+let aiConnectionsState={connections:[],active_id:''},aiSelectedId='',aiDraftRevision=0,aiKeyUntouched=false;
+let aiModels=[];
+function aiCombo(field,items,onSelect){
+  const input=$(field),menu=$(field+'Menu'),toggle=$(field+'Toggle'),root=$(field+'Combo');
+  function close(){menu.hidden=true;input.setAttribute('aria-expanded','false');toggle.setAttribute('aria-expanded','false');}
+  function show(filter=''){
+    document.querySelectorAll('.ai-combo-menu').forEach(other=>{if(other!==menu)other.hidden=true;});
+    menu.replaceChildren();
+    for(const item of items(filter)){
+      if(item.separator){const line=document.createElement('div');line.className='ai-combo-divider';line.setAttribute('role','separator');menu.append(line);continue;}
+      const option=document.createElement('button');option.type='button';option.setAttribute('role','option');option.textContent=item.label;
+      option.setAttribute('aria-selected',String(item.value===input.value));
+      option.onclick=()=>{onSelect(item);close();input.focus();};
+      option.onkeydown=event=>{
+        const options=Array.from(menu.querySelectorAll('button')),index=options.indexOf(option);
+        if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();options[(index+(event.key==='ArrowDown'?1:options.length-1))%options.length].focus();}
+        if(event.key==='Escape'){event.preventDefault();close();input.focus();}
+      };menu.append(option);
+    }
+    if(!menu.children.length){const empty=document.createElement('p');empty.textContent='No matching models. You can enter an identifier manually.';menu.append(empty);}
+    menu.hidden=false;input.setAttribute('aria-expanded','true');toggle.setAttribute('aria-expanded','true');
+  }
+  toggle.onclick=()=>menu.hidden?show():close();
+  input.addEventListener('input',()=>show(input.value));
+  input.addEventListener('keydown',event=>{
+    if(event.key==='ArrowDown'){event.preventDefault();if(menu.hidden)show();menu.querySelector('button')?.focus();}
+    if(event.key==='Escape')close();
+  });
+  root.addEventListener('focusout',event=>{if(!root.contains(event.relatedTarget))close();});
+  document.addEventListener('click',event=>{if(!root.contains(event.target))close();});
+  return {close};
 }
-$('saveAI').onclick=async()=>{const b=$('saveAI');b.disabled=true;try{showAISettings(await api('/api/ai-settings',{endpoint:$('aiEndpoint').value,model:$('aiModel').value,api_key:$('aiKey').value,clear_key:$('clearAIKey').checked}));$('clearAIKey').checked=false;}catch(error){$('aiStatus').textContent=error.message;}finally{b.disabled=false;}};
+const aiConnectionCombo=aiCombo('aiName',filter=>[
+  {label:'New connection',fresh:true},{separator:true},
+  ...aiConnectionsState.connections.filter(item=>item.name.toLowerCase().includes(filter.toLowerCase())).map(item=>({label:item.name,value:item.name,connection:item}))
+],item=>editAI(item.fresh?{}:item.connection));
+const aiModelCombo=aiCombo('aiModel',filter=>aiModels.filter(name=>name.toLowerCase().includes(filter.toLowerCase())).map(name=>({label:name,value:name})),item=>{
+  $('aiModel').value=item.value;aiDraftRevision++;$('aiStatus').textContent='Unsaved changes.';
+});
+function aiModelOptions(names=[]){aiModels=[...names];aiModelCombo.close();}
+function aiKeyState(saved){
+  aiKeyUntouched=saved;$('aiKey').type=saved?'text':'password';$('aiKey').value=saved?'********':'';
+}
+function editAI(connection={},name=connection.name||''){
+  aiDraftRevision++;aiSelectedId=connection.id||'';
+  $('aiName').value=name;$('aiEndpoint').value=connection.endpoint||'';
+  $('aiModel').value=connection.model||'';
+  aiKeyState(Boolean(connection.has_key));aiModelOptions(connection.model?[connection.model]:[]);
+  $('deleteAI').disabled=!aiSelectedId;
+  $('aiStatus').textContent='';
+}
+function showAISettings(data){
+  aiConnectionsState=data;
+  $('aiActive').textContent=data.active_id?'Active connection: '+data.name:'No active connection.';
+  editAI(data.connections.find(item=>item.id===data.active_id));
+}
+function aiDraft(){return {id:aiSelectedId,name:$('aiName').value,endpoint:$('aiEndpoint').value,model:$('aiModel').value,api_key:aiKeyUntouched?'':$('aiKey').value,clear_key:!aiKeyUntouched&&!$('aiKey').value};}
+$('aiName').addEventListener('input',()=>{aiDraftRevision++;$('aiStatus').textContent='Unsaved changes.';});
+$('aiKey').addEventListener('focus',()=>{if(aiKeyUntouched)$('aiKey').select();});
+$('aiKey').addEventListener('beforeinput',()=>{if(aiKeyUntouched){$('aiKey').value='';$('aiKey').type='password';aiKeyUntouched=false;}});
+for(const id of ['aiEndpoint','aiModel','aiKey'])$(id).addEventListener('input',()=>{
+  aiDraftRevision++;$('aiStatus').textContent='Unsaved changes.';
+  if(id==='aiEndpoint'||id==='aiKey')aiModelOptions();
+  if(id==='aiEndpoint')aiKeyState(false);
+  if(id==='aiKey'){aiKeyUntouched=false;$('aiKey').type='password';}
+});
+async function aiMutation(request){
+  try{showAISettings(await api('/api/ai-settings',request));$('aiStatus').textContent='Connection settings saved.';}
+  catch(error){$('aiStatus').textContent=error.message;}
+}
+$('saveAI').onclick=()=>aiMutation(aiDraft());
+$('deleteAI').onclick=async()=>{if(await confirmTool('Delete connection?','Remove this saved connection and its key?','Delete'))await aiMutation({action:'delete',id:aiSelectedId});};
+async function probeAI(){
+  const revision=aiDraftRevision;
+  $('testAI').disabled=true;$('aiStatus').textContent='Checking the API connection and fetching models...';
+  try{
+    const result=await api('/api/ai-settings/test',aiDraft());
+    if(revision!==aiDraftRevision)return;
+    aiModelOptions(result.models);
+    $('aiStatus').textContent='Connection verified. '+result.models.length+' models fetched. No model tokens were used.';
+  }catch(error){if(revision===aiDraftRevision)$('aiStatus').textContent=error.message;}
+  finally{$('testAI').disabled=false;}
+}
+$('testAI').onclick=probeAI;
 api('/api/ai-settings').then(showAISettings).catch(error=>{$('aiStatus').textContent=error.message;});
 let appUpdateTimer=null,appUpdateState=null;
 function showAppUpdate(data){
+  $('companionVersion').textContent='v'+data.current_version;
   appUpdateState=data;const active=['checking','downloading','verifying'].includes(data.status);
   $('appUpdateVersion').textContent='Current version: '+data.current_version+' · '+(data.distribution==='installer'?'Installed copy':data.distribution==='portable'?'Portable copy':'Development source');
   $('appUpdateStatus').textContent=data.message+(data.checked_at?' Last checked: '+new Date(data.checked_at).toLocaleString()+'.':'');
@@ -111,7 +191,7 @@ if(window.chrome?.webview)window.chrome.webview.addEventListener('message',event
 api('/api/app-update').then(data=>{$('appUpdateKind').value=data.distribution==='installer'?'installer':'portable';showAppUpdate(data);}).catch(error=>{$('appUpdateStatus').textContent=error.message;});
 $('browse').onclick=async()=>{const button=$('browse');if(button.disabled)return;button.disabled=true;try{const data=await selectInstallationFolder();if(data.installation){$('installation').value=data.installation;await $('saveInstallation').onclick();}}catch(error){$('settingsStatus').textContent=error.message;}finally{button.disabled=false;}};
 async function openRecent(id){try{const running=jobs.find(j=>j.status==='running');if(running&&running.id!==id){status(Error('A comparison is running. Wait for it to finish before opening a different report.'));return;}const win=frame.contentWindow;if(!win.openCompanionReport)throw Error('Model Vetting is still loading. Please try again.');await win.openCompanionReport(id);navigate('compare');status(null);}catch(error){status(error);}}
-async function refreshRecent(){try{const data=await api('/api/recent');jobs=data.jobs;$('recent').replaceChildren();$('running').textContent=jobs.some(j=>j.status==='running')?'1 running':'';if(!jobs.length)$('recent').textContent='No comparisons yet.';for(const item of jobs){const button=document.createElement('button');button.textContent=item.title;const note=document.createElement('small');note.textContent=item.status+(item.created?' · '+new Date(item.created*1000).toLocaleDateString():'');button.append(note);button.onclick=()=>openRecent(item.id);$('recent').append(button);}}catch(error){status(error);}}
+async function refreshRecent(){await window.companionWorkspace?.refreshRecents?.();}
 frame.addEventListener('load',()=>{updateToolControls();const win=frame.contentWindow;const link=win.document.getElementById('openSettings');if(link)link.onclick=()=>navigate('settings');});
 api('/api/installation').then(applyInstallation).catch(error=>{$('settingsStatus').textContent=error.message;status(error);});preferences();refreshRecent();setInterval(refreshRecent,3000);
 
@@ -135,9 +215,10 @@ async function refreshTools() {
   if(comparisonEnabled&&frame.getAttribute('src')==='about:blank')frame.src='/compare';
   $('installedTools').replaceChildren();
   for (const tool of installedTools) {
-    if(tool.id!=='ifs-model-vetting')action($('installedTools'), tool.name, () => openTool(tool));
+    if(!['ifs-model-vetting','ifs-scenario-builder','ifs-code-reader'].includes(tool.id))action($('installedTools'), tool.name, () => openTool(tool));
   }
   renderOfficialTools();
+  window.dispatchEvent(new Event('companion-tools-updated'));
 }
 async function uninstallTool(tool){
   if(toolBusy||!await confirmTool('Uninstall '+tool.name+'?', 'The tool will close and be removed from your sidebar. Your settings and saved work will be kept. If work is running, stop it before uninstalling.', 'Uninstall'))return;
@@ -229,9 +310,9 @@ function renderOfficialTools(){
     const note=document.createElement('small');
     const official=tool.official,installed=tool.installed,ready=!!(installed||tool.included);
     const published=official&&official.status!=='coming-soon';
-    const installedVersion=installed?.version||(tool.included?'0.1.0':null);
+    const installedVersion=installed?.version||null;
     const newer=published&&official.compatible&&installedVersion&&compareVersion(official.version,installedVersion)>0;
-    note.textContent=installed?'v'+installed.version:tool.included?'v0.1.0 / Included':published?'v'+official.version:'Online release coming soon';
+    note.textContent=installed?'v'+installed.version:tool.included?'Included':published?'v'+official.version:'Online release coming soon';
     if(official){
       const badge=document.createElement('button');badge.type='button';badge.className='official-badge';
       badge.setAttribute('aria-label','Official. Published by the IFs team.');
@@ -246,11 +327,7 @@ function renderOfficialTools(){
     size.textContent=installed?'Downloaded · Installed':tool.included?'Included with Companion':[release?.size?'Requires '+formatBytes(release.size)+' download':'',release?.installed_size?'~'+formatBytes(release.installed_size)+' disk space':''].filter(Boolean).join(' · ');
     if(size.textContent)info.append(size);row.append(icon,info);
     const controls=document.createElement('div');controls.className='tool-controls';
-    if(!ready&&published){
-      action(controls,'Install',()=>installOfficial(official));
-      controls.lastElementChild.disabled=toolBusy||!official.compatible;
-      controls.lastElementChild.title=official.compatible?'Download and install '+tool.name:'Requires Companion '+official.min_companion_version;
-    }else if(newer){
+    if(newer){
       action(controls,'Update',()=>installOfficial(official));
       controls.lastElementChild.disabled=toolBusy;
     }
@@ -308,6 +385,7 @@ async function pollDownload(){
   clearTimeout(downloadTimer);
   try{
     const state=await api('/api/tools/download');
+    window.dispatchEvent(new CustomEvent('companion-tool-download',{detail:state}));
     const active=['checking','downloading','verifying','installing'].includes(state.status);
     toolBusy=active;$('installTool').disabled=active;renderOfficialTools();
     if(state.status!=='idle')toolMessage(state.message);

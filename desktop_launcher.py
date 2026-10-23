@@ -3,7 +3,6 @@ import json
 import pathlib
 import sys
 import threading
-import traceback
 
 
 def main():

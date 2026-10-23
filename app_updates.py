@@ -4,7 +4,6 @@ import hashlib
 from pathlib import Path
 import re
 import threading
-import urllib.request
 import uuid
 import json
 

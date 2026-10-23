@@ -4,7 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
-    <Version>0.3.0</Version>
+    <Version>0.3.4</Version>
     <Product>IFsCompanion</Product>
     <ApplicationIcon>..\assets\app-icon.ico</ApplicationIcon>
     <UseWindowsForms>true</UseWindowsForms>

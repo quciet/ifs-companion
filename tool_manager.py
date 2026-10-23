@@ -135,7 +135,9 @@ class ToolManager:
             if release_info: meta.update(release_metadata(release_info))
             meta['installed_size'] = sum(i.file_size for i in infos)
             package.fp.seek(0, 2); meta['size'] = package.fp.tell()
-            if meta.get('min_companion_version') and version_key(meta['min_companion_version']) > version_key('0.3.0'):
+            from official_tools import COMPANION_VERSION
+            current_version = '.'.join(map(str, COMPANION_VERSION))
+            if meta.get('min_companion_version') and version_key(meta['min_companion_version']) > version_key(current_version):
                 raise ValueError('This tool requires Companion ' + meta['min_companion_version'] + ' or later.')
             identity = meta['id']
             self.before_change(identity)
@@ -218,6 +220,9 @@ class ToolManager:
                 env['IFS_VETTING_DATA_DIR'] = str(self.root.parent)
             env['IFS_AI_SETTINGS_FILE'] = str(self.root / 'ai-settings.json')
             env['IFS_SETTINGS_FILE'] = str(self.root.parent / 'settings.json')
+            if getattr(self,'execution_url',None):
+                env['IFS_EXECUTION_URL']=self.execution_url
+                env['IFS_EXECUTION_TOKEN']=self.execution_token
             command = [str(self._folder(identity) / meta['entrypoint'])]
             if meta.get('python_profile'):
                 env = self.python.environment(meta, env)

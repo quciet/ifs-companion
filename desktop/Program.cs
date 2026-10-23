@@ -99,7 +99,9 @@ sealed class CompanionWindow : Form
                         var shell = await view.CoreWebView2.ExecuteScriptAsync("JSON.stringify({tools:document.getElementById('toolsGroup').open,recent:document.getElementById('recentGroup').open,frame:!!document.getElementById('comparison').contentWindow.openCompanionReport,composer:document.getElementById('composer').getBoundingClientRect().height})");
                         var shellState = JsonDocument.Parse(JsonSerializer.Deserialize<string>(shell)!);
                         if (!shellState.RootElement.GetProperty("frame").GetBoolean()) throw new Exception("Comparison workspace did not load");
-                        if (shellState.RootElement.GetProperty("composer").GetDouble()<160) throw new Exception("Composer height is too small");
+                        if (shellState.RootElement.GetProperty("composer").GetDouble()<=0) throw new Exception("Message composer is not visible");
+                        var usableComposer = await view.CoreWebView2.ExecuteScriptAsync("Boolean(document.getElementById('prompt') && document.querySelector('#composer button[type=submit]') && !document.getElementById('prompt').disabled)");
+                        if (usableComposer!="true") throw new Exception("Message controls are unavailable");
                         await view.CoreWebView2.ExecuteScriptAsync("document.getElementById('toolsGroup').open=true;document.getElementById('recentGroup').open=true;document.querySelector('[data-view=compare]').click();");
                         var visible = await view.CoreWebView2.ExecuteScriptAsync("!document.getElementById('compareView').classList.contains('hidden')");
                         if (visible!="true") throw new Exception("Tool navigation failed");
